@@ -13,9 +13,7 @@ public record RankingContext(int candidateLimit) {
     }
   }
 
-  /**
-   * Convenience factory method.
-   */
+  /** Convenience factory method. */
   public static RankingContext of(int candidateLimit) {
     return new RankingContext(candidateLimit);
   }

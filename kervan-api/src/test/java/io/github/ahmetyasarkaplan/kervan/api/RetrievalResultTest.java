@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
-public class RetrievalResultTest {
+class RetrievalResultTest {
 
   @Test
   void shouldCreateSuccessfulResult() {
@@ -20,7 +23,6 @@ public class RetrievalResultTest {
     assertThat(result.candidates()).containsExactly(candidate);
     assertThat(result.duration()).isEqualTo(Duration.ofMillis(25));
     assertThat(result.status()).isEqualTo(RetrievalStatus.SUCCESS);
-    assertThat(result.failureReason()).isNull();
   }
 
   @Test
@@ -43,12 +45,10 @@ public class RetrievalResultTest {
 
   @Test
   void shouldCreateFailedResult() {
-    RetrievalResult<String> result =
-        RetrievalResult.failure("vector", "Connection refused", Duration.ofMillis(50));
+    RetrievalResult<String> result = RetrievalResult.failure("vector", Duration.ofMillis(50));
 
     assertThat(result.status()).isEqualTo(RetrievalStatus.FAILED);
     assertThat(result.candidates()).isEmpty();
-    assertThat(result.failureReason()).isEqualTo("Connection refused");
   }
 
   @Test
@@ -57,15 +57,16 @@ public class RetrievalResultTest {
 
     assertThat(result.status()).isEqualTo(RetrievalStatus.TIMED_OUT);
     assertThat(result.candidates()).isEmpty();
-    assertThat(result.failureReason()).isEqualTo("Retrieval timed out");
   }
 
   @Test
   void shouldRejectNullOrBlankRetrieverName() {
-    assertThatThrownBy(() -> new RetrievalResult<>(null, List.of(), Duration.ZERO, RetrievalStatus.EMPTY, null))
+    assertThatThrownBy(
+            () -> new RetrievalResult<>(null, List.of(), Duration.ZERO, RetrievalStatus.EMPTY))
         .isInstanceOf(NullPointerException.class);
 
-    assertThatThrownBy(() -> new RetrievalResult<>("  ", List.of(), Duration.ZERO, RetrievalStatus.EMPTY, null))
+    assertThatThrownBy(
+            () -> new RetrievalResult<>("  ", List.of(), Duration.ZERO, RetrievalStatus.EMPTY))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("retrieverName must not be blank");
   }
@@ -82,6 +83,66 @@ public class RetrievalResultTest {
 
     assertThat(result.candidates()).hasSize(1);
     assertThatThrownBy(() -> result.candidates().add(Candidate.of("c3", 3.0, "src")))
+        .isInstanceOf(UnsupportedOperationException.class);
+  }
+
+  @Test
+  void shouldRejectSuccessfulStatusWithoutCandidatesInDirectConstructor() {
+    assertThatThrownBy(
+            () -> new RetrievalResult<>("src", List.of(), Duration.ZERO, RetrievalStatus.SUCCESS))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("SUCCESS requires at least one candidate");
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = RetrievalStatus.class,
+      names = {"EMPTY", "FAILED", "TIMED_OUT"})
+  void shouldRejectCandidatesForNonSuccessfulStatus(RetrievalStatus status) {
+    assertThatThrownBy(
+            () ->
+                new RetrievalResult<>(
+                    "src", List.of(Candidate.of("doc", 1.0, "src")), Duration.ZERO, status))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Only SUCCESS may contain candidates");
+  }
+
+  @ParameterizedTest
+  @EnumSource(RetrievalStatus.class)
+  void shouldRejectNegativeDurationForEveryStatus(RetrievalStatus status) {
+    List<Candidate<String>> candidates =
+        status == RetrievalStatus.SUCCESS ? List.of(Candidate.of("doc", 1.0, "src")) : List.of();
+    assertThatThrownBy(() -> new RetrievalResult<>("src", candidates, Duration.ofNanos(-1), status))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("duration must not be negative");
+  }
+
+  @Test
+  void shouldRejectNullFieldsAndCandidates() {
+    assertThatThrownBy(
+            () -> new RetrievalResult<>("src", null, Duration.ZERO, RetrievalStatus.EMPTY))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> new RetrievalResult<>("src", List.of(), null, RetrievalStatus.EMPTY))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> new RetrievalResult<>("src", List.of(), Duration.ZERO, null))
+        .isInstanceOf(NullPointerException.class);
+    List<Candidate<String>> candidates = Arrays.asList((Candidate<String>) null);
+    assertThatThrownBy(
+            () -> new RetrievalResult<>("src", candidates, Duration.ZERO, RetrievalStatus.SUCCESS))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> RetrievalResult.success("src", null, Duration.ZERO))
+        .isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  void shouldCopyCandidatesInDirectConstructor() {
+    var first = Candidate.of("first", 1.0, "src");
+    var second = Candidate.of("second", 2.0, "src");
+    var input = new ArrayList<>(List.of(first, second));
+    var result = new RetrievalResult<>("src", input, Duration.ZERO, RetrievalStatus.SUCCESS);
+    input.clear();
+    assertThat(result.candidates()).containsExactly(first, second);
+    assertThatThrownBy(() -> result.candidates().clear())
         .isInstanceOf(UnsupportedOperationException.class);
   }
 }

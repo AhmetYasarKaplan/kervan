@@ -10,21 +10,21 @@ within explicit latency and candidate budgets.
 ## Status
 
 Kervan is under active development. The current development version is `0.1.0-SNAPSHOT`.
+The implemented surface consists of candidate and result models, synchronous
+component contracts, and an identity ranker. Pipeline execution is not implemented.
 
 ## Intended request flow
 
 ```text
 Request
-  → parallel candidate retrieval
-  → deduplication and provenance
-  → rank/score fusion
-  → optional reranking and result policies
-  → final ranked results
+  -> parallel candidate retrieval
+  -> deduplication and provenance
+  -> rank/score fusion
+  -> optional reranking and result policies
+  -> final ranked results
 ```
 
-The embedded Java library is the primary design target. Planned integrations
-include Elasticsearch lexical/vector retrieval and Spring Boot configuration,
-with optional metrics and tracing. These capabilities will be added incrementally.
+The embedded Java library is the primary design target.
 
 Kervan coordinates retrieval and ranking components. Search indexing, embedding
 generation, model training/serving, user-profile services, and large relevance
@@ -35,7 +35,7 @@ experimentation platforms are outside its scope.
 | Module | Responsibility |
 | --- | --- |
 | `kervan-api` | Public contracts and domain-independent value types |
-| `kervan-core` | Pipeline construction, execution, and rank fusion |
+| `kervan-core` | Built-in execution components, including `IdentityRanker` |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
 Neither module has external production dependencies. The Maven group and Java

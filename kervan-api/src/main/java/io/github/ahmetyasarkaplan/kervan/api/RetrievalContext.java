@@ -21,9 +21,7 @@ public record RetrievalContext(int candidateLimit, Duration timeout) {
     }
   }
 
-  /**
-   * Convenience factory method for creating a retrieval context.
-   */
+  /** Convenience factory method for creating a retrieval context. */
   public static RetrievalContext of(int candidateLimit, Duration timeout) {
     return new RetrievalContext(candidateLimit, timeout);
   }

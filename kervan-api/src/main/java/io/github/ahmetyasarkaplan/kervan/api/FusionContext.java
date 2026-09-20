@@ -13,9 +13,7 @@ public record FusionContext(int candidateLimit) {
     }
   }
 
-  /**
-   * Convenience factory method.
-   */
+  /** Convenience factory method. */
   public static FusionContext of(int candidateLimit) {
     return new FusionContext(candidateLimit);
   }

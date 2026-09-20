@@ -8,8 +8,10 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
-public class CandidateTest {
+class CandidateTest {
 
   @Test
   void shouldCreateValidCandidateWithFullConstructor() {
@@ -46,11 +48,7 @@ public class CandidateTest {
     assertThatThrownBy(
             () ->
                 new Candidate<String>(
-                    null,
-                    1.0,
-                    Set.of("lexical"),
-                    Map.of("lexical", 1.0),
-                    Map.of()))
+                    null, 1.0, Set.of("lexical"), Map.of("lexical", 1.0), Map.of()))
         .isInstanceOf(NullPointerException.class)
         .hasMessageContaining("id must not be null");
   }
@@ -60,11 +58,7 @@ public class CandidateTest {
     assertThatThrownBy(
             () ->
                 new Candidate<>(
-                    "doc-1",
-                    Double.NaN,
-                    Set.of("lexical"),
-                    Map.of("lexical", 1.0),
-                    Map.of()))
+                    "doc-1", Double.NaN, Set.of("lexical"), Map.of("lexical", 1.0), Map.of()))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("score must be a finite number");
 
@@ -94,33 +88,16 @@ public class CandidateTest {
   @Test
   void shouldRejectNullCollectionsInConstructor() {
     assertThatThrownBy(
-            () ->
-                new Candidate<String>(
-                    "doc-1",
-                    1.0,
-                    null,
-                    Map.of("lexical", 1.0),
-                    Map.of()))
+            () -> new Candidate<String>("doc-1", 1.0, null, Map.of("lexical", 1.0), Map.of()))
+        .isInstanceOf(NullPointerException.class);
+
+    assertThatThrownBy(() -> new Candidate<String>("doc-1", 1.0, Set.of("lexical"), null, Map.of()))
         .isInstanceOf(NullPointerException.class);
 
     assertThatThrownBy(
             () ->
                 new Candidate<String>(
-                    "doc-1",
-                    1.0,
-                    Set.of("lexical"),
-                    null,
-                    Map.of()))
-        .isInstanceOf(NullPointerException.class);
-
-    assertThatThrownBy(
-            () ->
-                new Candidate<String>(
-                    "doc-1",
-                    1.0,
-                    Set.of("lexical"),
-                    Map.of("lexical", 1.0),
-                    null))
+                    "doc-1", 1.0, Set.of("lexical"), Map.of("lexical", 1.0), null))
         .isInstanceOf(NullPointerException.class);
   }
 
@@ -145,7 +122,6 @@ public class CandidateTest {
     Candidate<String> candidate =
         new Candidate<>("doc-1", 5.0, mutableSources, mutableScores, mutableAttributes);
 
-    // Dışarıdaki koleksiyonlar değiştirildiğinde adayın içi etkilenmemeli
     mutableSources.add("vector");
     mutableScores.put("vector", 10.0);
     mutableAttributes.put("inStock", false);
@@ -154,7 +130,6 @@ public class CandidateTest {
     assertThat(candidate.sourceScores()).hasSize(1).containsEntry("lexical", 5.0);
     assertThat(candidate.attributes()).containsEntry("inStock", true);
 
-    // Adayın koleksiyonlarına dışarıdan doğrudan müdahale edilememeli
     assertThatThrownBy(() -> candidate.sources().add("new_source"))
         .isInstanceOf(UnsupportedOperationException.class);
 
@@ -174,5 +149,36 @@ public class CandidateTest {
     assertThat(c1).isEqualTo(c2);
     assertThat(c1.hashCode()).isEqualTo(c2.hashCode());
     assertThat(c1).isNotEqualTo(c3);
+  }
+
+  @ParameterizedTest
+  @ValueSource(doubles = {Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY})
+  void shouldRejectNonFiniteSourceScoresEvenWhenCurrentScoreIsFinite(double sourceScore) {
+    assertThatThrownBy(
+            () ->
+                new Candidate<>(
+                    "doc",
+                    1.0,
+                    Set.of("lexical", "vector"),
+                    Map.of("lexical", 2.0, "vector", sourceScore),
+                    Map.of()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("sourceScores must contain only finite numbers");
+  }
+
+  @ParameterizedTest
+  @ValueSource(doubles = {-Double.MAX_VALUE, -2.5, -0.0, 0.0, Double.MAX_VALUE})
+  void shouldPreserveFiniteCurrentAndSourceScores(double score) {
+    var candidate = Candidate.of("doc", score, "lexical");
+    assertThat(candidate.score()).isEqualTo(score);
+    assertThat(candidate.sourceScores()).containsEntry("lexical", score);
+  }
+
+  @Test
+  void shouldRejectNullSourceScoreValues() {
+    Map<String, Double> scores = new HashMap<>();
+    scores.put("lexical", null);
+    assertThatThrownBy(() -> new Candidate<>("doc", 1.0, Set.of("lexical"), scores, Map.of()))
+        .isInstanceOf(NullPointerException.class);
   }
 }

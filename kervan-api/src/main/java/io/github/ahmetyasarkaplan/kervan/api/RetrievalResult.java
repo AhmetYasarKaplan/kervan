@@ -7,31 +7,38 @@ import java.util.Objects;
 /**
  * Encapsulates the outcome of candidate retrieval from a single source.
  *
+ * <p>Only {@link RetrievalStatus#SUCCESS} contains candidates, and it must contain at least one.
+ * Failure information is limited to the status; exception messages and causes are not retained.
+ *
  * @param <ID> the candidate identifier type.
  * @param retrieverName the stable identifier of the retriever source.
  * @param candidates ordered candidates returned by the retriever (unmodifiable).
  * @param duration the wall-clock time taken by the retrieval stage.
  * @param status the operational status of the retrieval.
- * @param failureReason a human-readable failure description, or null if successful.
  */
 public record RetrievalResult<ID>(
     String retrieverName,
     List<Candidate<ID>> candidates,
     Duration duration,
-    RetrievalStatus status,
-    String failureReason) {
+    RetrievalStatus status) {
 
   public RetrievalResult {
     Objects.requireNonNull(retrieverName, "retrieverName must not be null");
     if (retrieverName.isBlank()) {
       throw new IllegalArgumentException("retrieverName must not be blank");
     }
-    candidates = List.copyOf(candidates);
+    candidates = List.copyOf(Objects.requireNonNull(candidates, "candidates must not be null"));
     Objects.requireNonNull(duration, "duration must not be null");
     if (duration.isNegative()) {
       throw new IllegalArgumentException("duration must not be negative: " + duration);
     }
     Objects.requireNonNull(status, "status must not be null");
+    if (status == RetrievalStatus.SUCCESS && candidates.isEmpty()) {
+      throw new IllegalArgumentException("SUCCESS requires at least one candidate");
+    }
+    if (status != RetrievalStatus.SUCCESS && !candidates.isEmpty()) {
+      throw new IllegalArgumentException("Only SUCCESS may contain candidates");
+    }
   }
 
   /**
@@ -39,31 +46,24 @@ public record RetrievalResult<ID>(
    */
   public static <ID> RetrievalResult<ID> success(
       String retrieverName, List<Candidate<ID>> candidates, Duration duration) {
-    RetrievalStatus status = candidates.isEmpty() ? RetrievalStatus.EMPTY : RetrievalStatus.SUCCESS;
-    return new RetrievalResult<>(retrieverName, candidates, duration, status, null);
+    List<Candidate<ID>> snapshot =
+        List.copyOf(Objects.requireNonNull(candidates, "candidates must not be null"));
+    RetrievalStatus status = snapshot.isEmpty() ? RetrievalStatus.EMPTY : RetrievalStatus.SUCCESS;
+    return new RetrievalResult<>(retrieverName, snapshot, duration, status);
   }
 
-  /**
-   * Creates an empty retrieval result with zero candidates.
-   */
+  /** Creates an empty retrieval result with zero candidates. */
   public static <ID> RetrievalResult<ID> empty(String retrieverName, Duration duration) {
-    return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.EMPTY, null);
+    return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.EMPTY);
   }
 
-  /**
-   * Creates a failed retrieval result with an associated failure reason.
-   */
-  public static <ID> RetrievalResult<ID> failure(
-      String retrieverName, String failureReason, Duration duration) {
-    return new RetrievalResult<>(
-        retrieverName, List.of(), duration, RetrievalStatus.FAILED, failureReason);
+  /** Creates a failed retrieval result without retaining exception details. */
+  public static <ID> RetrievalResult<ID> failure(String retrieverName, Duration duration) {
+    return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.FAILED);
   }
 
-  /**
-   * Creates a timed-out retrieval result.
-   */
+  /** Creates a timed-out retrieval result. */
   public static <ID> RetrievalResult<ID> timedOut(String retrieverName, Duration duration) {
-    return new RetrievalResult<>(
-        retrieverName, List.of(), duration, RetrievalStatus.TIMED_OUT, "Retrieval timed out");
+    return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.TIMED_OUT);
   }
 }
