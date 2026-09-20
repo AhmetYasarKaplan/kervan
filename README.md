@@ -9,10 +9,7 @@ within explicit latency and candidate budgets.
 
 ## Status
 
-Kervan is at **Milestone 0: repository foundation**. The repository provides the
-multi-module build, formatting, test and coverage configuration, and continuous
-integration. It does not yet provide a runnable pipeline or a public Java API.
-The current development version is `0.1.0-SNAPSHOT`; no artifacts are published.
+Kervan is under active development. The current development version is `0.1.0-SNAPSHOT`.
 
 ## Intended request flow
 
@@ -35,10 +32,10 @@ experimentation platforms are outside its scope.
 
 ## Modules
 
-| Module | Intended responsibility | Current state |
-| --- | --- | --- |
-| `kervan-api` | Public contracts and domain-independent value types | Empty Java library |
-| `kervan-core` | Pipeline construction and execution | Empty Java library depending on API |
+| Module | Responsibility |
+| --- | --- |
+| `kervan-api` | Public contracts and domain-independent value types |
+| `kervan-core` | Pipeline construction, execution, and rank fusion |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
 Neither module has external production dependencies. The Maven group and Java
@@ -77,27 +74,14 @@ JUnit 5 and AssertJ are configured for each module. Compiler warnings are enable
 Tool versions are pinned in the [version catalog](gradle/libs.versions.toml) and
 [wrapper configuration](gradle/wrapper/gradle-wrapper.properties).
 
-There are no production classes or tests at this stage. Test tasks therefore
-report `NO-SOURCE`, and JaCoCo reports are skipped until test execution data is
-available. A successful foundation build verifies build configuration and
-dependency boundaries; it does not establish pipeline behavior or code coverage.
-Behavioral tests will accompany the first implementation.
-
-Once tests exist, reports are written under each module:
+Test and coverage reports are generated under each module:
 
 - Tests: `build/reports/tests/test/index.html`
 - Coverage: `build/reports/jacoco/test/html/index.html`
 - Coverage XML: `build/reports/jacoco/test/jacocoTestReport.xml`
-
-Coverage has no percentage gate. Tests should establish meaningful behavior and
-failure semantics as the framework develops.
 
 ## Design documentation
 
 - [Architecture and module boundaries](docs/architecture.md)
 - [Java 21 and Gradle](docs/adr/0001-java-21-and-gradle.md)
 - [Framework-independent module boundaries](docs/adr/0002-module-boundaries.md)
-
-The next milestone introduces a minimal sequential pipeline and its public
-contracts. Concurrency, fusion strategies, infrastructure adapters, and examples
-follow in later milestones.

@@ -16,7 +16,7 @@ through Gradle's `api` configuration. API never depends on core.
 
 Use `io.github.ahmetyasarkaplan.kervan` as the Maven group and Java package prefix,
 with `.api` and `.core` packages for the two modules. Both modules are Java
-libraries with no external production dependencies at this stage.
+libraries with zero external production dependencies.
 
 Spring, Elasticsearch, HTTP, and infrastructure-specific serialization dependencies
 belong in future adapters. Build checks enforce the current production dependency
@@ -26,5 +26,5 @@ boundary without adding a separate architecture-testing library.
 
 Integrations can evolve without becoming prerequisites for the embedded library.
 Future production dependency additions require an explicit boundary review.
-Public types, method signatures, and execution semantics are decided with the
-first implementation; empty placeholder contracts are unnecessary.
+Contracts and execution semantics are introduced alongside concrete behaviors,
+avoiding empty placeholder abstractions.

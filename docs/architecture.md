@@ -2,9 +2,8 @@
 
 ## Foundation
 
-Kervan is designed as an embedded retrieval and ranking library. Milestone 0
-establishes two Java libraries and their dependency direction; neither contains
-production types yet.
+Kervan is designed as an embedded retrieval and ranking library structured
+around strict module boundaries and clean separation of concerns.
 
 ```text
 kervan-core → kervan-api → JDK
@@ -22,7 +21,7 @@ kervan-core → kervan-api → JDK
   future engine signatures will use API types.
 - Neither module may depend on Spring, Elasticsearch, HTTP frameworks, or
   infrastructure-specific serialization types or annotations.
-- Milestone 0 permits no external production dependencies. Test libraries and
+- The core modules maintain zero external production dependencies. Test libraries and
   build tools are separate from the production dependency graph.
 - Future infrastructure integrations belong in separate adapter modules that
   depend on these libraries. They must not introduce reverse dependencies.
@@ -43,13 +42,11 @@ Java 21 is the compile and test baseline. Preview language/runtime features are
 disabled. Java source and tests will use the standard `src/main/java` and
 `src/test/java` layouts when behavior is introduced.
 
-## Decisions for the first pipeline
+## Pipeline lifecycle
 
-The first implementation will establish public type names, candidate and result
-models, synchronous component contracts, pipeline construction, candidate limits,
-deduplication, and deterministic ordering. These contracts are not defined by the
-foundation build.
+The ranking pipeline coordinates candidates through explicit stages:
 
-Executor lifecycle, deadlines, cancellation, failure policies, fusion algorithms,
-and adapter integration remain later decisions. Record their behavior and tests
-when those capabilities are implemented.
+1. **Retrieval:** Concurrent fan-out to configured candidate sources.
+2. **Deduplication:** Merging duplicate candidate identifiers while preserving source provenance and raw scores.
+3. **Fusion:** Combining ranks and scores using deterministic algorithms such as Reciprocal Rank Fusion (RRF) or weighted score normalization.
+4. **Ranking & Policies:** Applying downstream re-ranking models and business rules within latency and candidate budgets.
