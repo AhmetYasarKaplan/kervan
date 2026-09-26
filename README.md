@@ -11,9 +11,9 @@ source contributions.
 
 Kervan is under active development. The current development version is
 `0.1.0-SNAPSHOT`. The library provides a synchronous pipeline with concurrent
-provider calls, time budgets, failure policies, first-seen fusion, an identity
-ranker, candidate limits, and source provenance. The public API is still subject
-to change.
+provider calls, time budgets, failure policies, reciprocal rank and weighted
+score fusion, an identity ranker, candidate limits, and source provenance. The
+public API is still subject to change.
 
 ## Intended request flow
 
@@ -40,9 +40,9 @@ embedding generation, and model training/serving are outside Kervan's scope.
 import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
 import io.github.ahmetyasarkaplan.kervan.api.FailurePolicy;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
-import io.github.ahmetyasarkaplan.kervan.core.FirstSeenFusion;
 import io.github.ahmetyasarkaplan.kervan.core.IdentityRanker;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
+import io.github.ahmetyasarkaplan.kervan.core.ReciprocalRankFusion;
 import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
 import java.time.Duration;
 import java.util.List;
@@ -57,7 +57,7 @@ try (RankingPipeline<String, String> pipeline =
         .addRetriever(RetrieverSpec.required("search", search, 10, Duration.ofMillis(140)))
         .addRetriever(
             RetrieverSpec.optional("recommendations", recommendations, 10, Duration.ofMillis(100)))
-        .fusion(new FirstSeenFusion<>(), 20)
+        .fusion(new ReciprocalRankFusion<>(60), 20)
         .ranker(new IdentityRanker<>(), 20)
         .resultLimit(10)
         .timeout(Duration.ofMillis(250))
@@ -70,9 +70,14 @@ try (RankingPipeline<String, String> pipeline =
 }
 ```
 
-`FirstSeenFusion` keeps provider registration order and the first score for each
-canonical ID. It retains the original rank and score contributed by every provider.
-It is a deterministic baseline strategy, not a relevance fusion algorithm.
+`ReciprocalRankFusion` combines source ranks without comparing their raw scores.
+It is also the pipeline default with a rank constant of 60 when `.fusion(...)`
+is omitted. An explicit fusion configuration sets both the strategy and its
+output limit.
+`WeightedMinMaxFusion` instead normalizes each source's returned scores and adds
+them using optional positive weights on `RetrieverSpec`. `FirstSeenFusion` remains
+available when provider registration order should determine the result. All three
+strategies retain each provider's original rank and score for inspection.
 Retriever implementations are supplied by the application. The example uses
 in-memory lambdas; it does not contact an external provider.
 
@@ -81,7 +86,7 @@ in-memory lambdas; it does not contact an external provider.
 | Module | Responsibility |
 | --- | --- |
 | `kervan-api` | Public contracts and domain-independent value types |
-| `kervan-core` | Concurrent pipeline, time budgets, failure handling, first-seen fusion, and identity ranker |
+| `kervan-core` | Concurrent pipeline, time budgets, failure handling, built-in fusion strategies, and identity ranker |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
 Neither module has external production dependencies. The Maven group and Java
@@ -133,3 +138,4 @@ Test and coverage reports are generated under each module:
 - [Framework-independent module boundaries](docs/adr/0002-module-boundaries.md)
 - [Provider boundaries and native search capabilities](docs/adr/0003-provider-boundaries.md)
 - [Deadlines and failure policies](docs/adr/0004-deadlines-and-failure-policies.md)
+- [Cross-provider fusion](docs/adr/0005-cross-provider-fusion.md)

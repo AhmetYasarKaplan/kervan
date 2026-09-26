@@ -20,9 +20,13 @@ final class CandidateMerger {
   static <ID> List<RankedCandidate<ID>> merge(List<RetrievalResult<ID>> results) {
     Objects.requireNonNull(results, "results must not be null");
     Map<ID, Accumulator<ID>> byId = new LinkedHashMap<>();
+    Set<String> sourceNames = new HashSet<>();
 
     for (RetrievalResult<ID> result : results) {
       Objects.requireNonNull(result, "results must not contain null elements");
+      if (!sourceNames.add(result.retrieverName())) {
+        throw new IllegalArgumentException("retrieval results must have unique source names");
+      }
       Set<ID> seenInSource = new HashSet<>();
       for (SourceHit<ID> hit : result.candidates()) {
         ID id = hit.candidate().id();

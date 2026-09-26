@@ -4,13 +4,14 @@ import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
 import java.time.Duration;
 import java.util.Objects;
 
-/** The stable identity, implementation and execution limits of one independent provider. */
+/** The stable identity, implementation, execution limits and fusion weight of one provider. */
 public record RetrieverSpec<Q, ID>(
     String name,
     CandidateRetriever<Q, ID> retriever,
     int candidateLimit,
     Duration timeout,
-    boolean required) {
+    boolean required,
+    double weight) {
 
   public RetrieverSpec {
     Objects.requireNonNull(name, "name must not be null");
@@ -30,15 +31,45 @@ public record RetrieverSpec<Q, ID>(
     } catch (ArithmeticException e) {
       throw new IllegalArgumentException("timeout is too large", e);
     }
+    if (!Double.isFinite(weight) || weight <= 0) {
+      throw new IllegalArgumentException("weight must be positive and finite");
+    }
+  }
+
+  public RetrieverSpec(
+      String name,
+      CandidateRetriever<Q, ID> retriever,
+      int candidateLimit,
+      Duration timeout,
+      boolean required) {
+    this(name, retriever, candidateLimit, timeout, required, 1.0);
   }
 
   public static <Q, ID> RetrieverSpec<Q, ID> required(
       String name, CandidateRetriever<Q, ID> retriever, int candidateLimit, Duration timeout) {
-    return new RetrieverSpec<>(name, retriever, candidateLimit, timeout, true);
+    return required(name, retriever, candidateLimit, timeout, 1.0);
+  }
+
+  public static <Q, ID> RetrieverSpec<Q, ID> required(
+      String name,
+      CandidateRetriever<Q, ID> retriever,
+      int candidateLimit,
+      Duration timeout,
+      double weight) {
+    return new RetrieverSpec<>(name, retriever, candidateLimit, timeout, true, weight);
   }
 
   public static <Q, ID> RetrieverSpec<Q, ID> optional(
       String name, CandidateRetriever<Q, ID> retriever, int candidateLimit, Duration timeout) {
-    return new RetrieverSpec<>(name, retriever, candidateLimit, timeout, false);
+    return optional(name, retriever, candidateLimit, timeout, 1.0);
+  }
+
+  public static <Q, ID> RetrieverSpec<Q, ID> optional(
+      String name,
+      CandidateRetriever<Q, ID> retriever,
+      int candidateLimit,
+      Duration timeout,
+      double weight) {
+    return new RetrieverSpec<>(name, retriever, candidateLimit, timeout, false, weight);
   }
 }

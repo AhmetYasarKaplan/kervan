@@ -208,6 +208,14 @@ class RankingPipelineTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> RetrieverSpec.required("search", empty, 1, null))
         .isInstanceOf(NullPointerException.class);
+    assertThat(RetrieverSpec.required("search", empty, 1, Duration.ofSeconds(1)).weight())
+        .isEqualTo(1.0);
+    for (double weight : new double[] {0.0, -1.0, Double.NaN, Double.POSITIVE_INFINITY}) {
+      assertThatThrownBy(
+              () -> RetrieverSpec.optional("search", empty, 1, Duration.ofSeconds(1), weight))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("weight");
+    }
     assertThatThrownBy(
             () -> RankingPipeline.<String, String>builder("discovery").timeout(Duration.ZERO))
         .isInstanceOf(IllegalArgumentException.class);

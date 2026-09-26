@@ -75,6 +75,9 @@ class CandidateMergerTest {
     List<RetrievalResult<String>> results = Arrays.asList((RetrievalResult<String>) null);
     assertThatThrownBy(() -> CandidateMerger.merge(results))
         .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(() -> CandidateMerger.merge(List.of(result("same"), result("same"))))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("unique source names");
   }
 
   private static SourceHit<String> hit(String id, double score, int rank) {

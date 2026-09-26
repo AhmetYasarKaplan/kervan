@@ -73,8 +73,11 @@ provider list fanned out concurrently on virtual threads
   -> pipeline result
 ```
 
-`RankingPipeline` requires at least one named retriever, an explicit fusion
-strategy, ranker, positive result limit, global timeout, and failure policy.
+`RankingPipeline` requires at least one named retriever, a ranker, positive
+result limit, global timeout, and failure policy. Without an explicit fusion
+strategy, it uses reciprocal rank fusion with `k = 60` and a fusion limit equal
+to the sum of configured provider candidate limits, capped at the maximum
+integer value.
 Retriever names must be unique. Each retriever specifies a positive timeout and
 whether it is required. Calls run concurrently, while fusion receives outcomes in
 registration order. Later stage outputs are capped to their configured limits;
@@ -85,6 +88,19 @@ determines final position and score. Contributions from later providers are
 appended in provider order, and attributes from the first occurrence of each key
 win. `IdentityRanker` preserves this order while applying its candidate limit.
 This baseline does not calculate a relevance-fusion score.
+
+`ReciprocalRankFusion` sums `1 / (k + source rank)` for each contribution, where
+`k` is a positive rank constant. It uses source order rather than raw scores, so
+providers may use unrelated scoring scales. `WeightedMinMaxFusion` normalizes
+scores separately within each provider's returned, deduplicated window, then
+sums weighted values. A source with equal scores assigns 1.0 to every returned
+candidate. Weights are positive finite values on `RetrieverSpec`; the default is
+1.0. Reciprocal rank fusion ignores weights. Both strategies sort by fused score,
+then best source rank, then ranks in provider registration order, then first
+appearance. They cap their output at the configured fusion limit while retaining
+original source contributions. The provider candidate limit is applied before
+fusion, so it controls which candidates contribute; min-max scores also depend
+on the returned window. See the [fusion decision](adr/0005-cross-provider-fusion.md).
 
 A pipeline owns one reusable virtual-thread executor, accepts concurrent
 `execute` calls, and must be closed when it is no longer needed. Closing stops

@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
@@ -51,6 +52,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
   private final int resultLimit;
   private final long timeoutNanos;
   private final FailurePolicy failurePolicy;
+  private final Map<String, Double> sourceWeights;
   private final ExecutorService executor;
   private final Object lifecycleLock = new Object();
   private final Set<Future<?>> activeFutures = new HashSet<>();
@@ -60,13 +62,27 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
   private RankingPipeline(Builder<Q, ID> builder) {
     name = builder.name;
     retrievers = List.copyOf(builder.retrievers);
-    fusion = builder.fusion;
-    fusionLimit = builder.fusionLimit;
+    if (builder.fusion == null) {
+      fusion = new ReciprocalRankFusion<>(60);
+      long sourceCapacity = 0;
+      for (RetrieverSpec<Q, ID> spec : retrievers) {
+        sourceCapacity += spec.candidateLimit();
+      }
+      fusionLimit = (int) Math.min(sourceCapacity, Integer.MAX_VALUE);
+    } else {
+      fusion = builder.fusion;
+      fusionLimit = builder.fusionLimit;
+    }
     ranker = builder.ranker;
     rankingLimit = builder.rankingLimit;
     resultLimit = builder.resultLimit;
     timeoutNanos = builder.timeout.toNanos();
     failurePolicy = builder.failurePolicy;
+    Map<String, Double> weights = new LinkedHashMap<>();
+    for (RetrieverSpec<Q, ID> spec : retrievers) {
+      weights.put(spec.name(), spec.weight());
+    }
+    sourceWeights = Map.copyOf(weights);
     executor = Executors.newVirtualThreadPerTaskExecutor();
   }
 
@@ -340,7 +356,8 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
 
   private List<RankedCandidate<ID>> finish(Q query, List<RetrievalResult<ID>> results) {
     List<RankedCandidate<ID>> fused =
-        limitUnique(fusion.fuse(results, FusionContext.of(fusionLimit)), fusionLimit);
+        limitUnique(
+            fusion.fuse(results, FusionContext.of(fusionLimit, sourceWeights)), fusionLimit);
     List<RankedCandidate<ID>> ranked =
         limitUnique(ranker.rank(query, fused, RankingContext.of(rankingLimit)), rankingLimit);
     return List.copyOf(ranked.subList(0, Math.min(ranked.size(), resultLimit)));
@@ -514,13 +531,9 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
           throw new IllegalStateException("retriever names must be unique");
         }
       }
-      if (fusion == null
-          || ranker == null
-          || resultLimit == 0
-          || timeout == null
-          || failurePolicy == null) {
+      if (ranker == null || resultLimit == 0 || timeout == null || failurePolicy == null) {
         throw new IllegalStateException(
-            "fusion, ranker, resultLimit, timeout and failurePolicy are required");
+            "ranker, resultLimit, timeout and failurePolicy are required");
       }
       return new RankingPipeline<>(this);
     }
