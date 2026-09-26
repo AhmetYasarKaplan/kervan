@@ -25,6 +25,10 @@ kervan-elasticsearch -> kervan-api
                      -> Elasticsearch Java client
 kervan-spring-boot-starter -> kervan-core -> kervan-api
                            -> Spring Boot
+kervan-observability -> kervan-core -> kervan-api
+                     -> Micrometer, OpenTelemetry API, SLF4J
+kervan-testkit       -> kervan-api
+                     -> JUnit Jupiter API
 ```
 
 | Module | Package prefix | Responsibility |
@@ -33,6 +37,8 @@ kervan-spring-boot-starter -> kervan-core -> kervan-api
 | `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution, built-in components |
 | `kervan-elasticsearch` | `io.github.ahmetyasarkaplan.kervan.elasticsearch` | Native search request adapter and canonical hit mapping |
 | `kervan-spring-boot-starter` | `io.github.ahmetyasarkaplan.kervan.spring` | Configured pipeline assembly, component lookup, and conditional health integration |
+| `kervan-observability` | `io.github.ahmetyasarkaplan.kervan.observability` | Optional metrics, tracing, and structured execution logging |
+| `kervan-testkit` | `io.github.ahmetyasarkaplan.kervan.testkit` | Test fixtures, retriever contracts, and pipeline assertions |
 
 API does not depend on core. Neither API nor core depends on Spring, Elasticsearch,
 HTTP frameworks, or infrastructure-specific serialization annotations. Core
@@ -52,6 +58,15 @@ through a registry and exposes a health indicator when Spring Boot's health
 types are present.
 It does not add Spring dependencies to API or core or create a search provider
 from YAML. See the [Spring Boot guide](spring-boot.md).
+
+Core exposes a small `PipelineObserver` hook for pipeline and stage outcomes.
+The optional observability module implements it using Micrometer, OpenTelemetry,
+and SLF4J. Observer callbacks receive configured names, coarse statuses,
+durations, and candidate counts; they do not receive the query or candidates.
+The builder accepts one observer, which can be a composite of several signals.
+The testkit uses public API contracts and JUnit to exercise custom retrievers;
+applications should keep it on their test classpath. See the
+[observability guide](observability.md) and [testkit guide](testkit.md).
 
 ## Candidate model
 

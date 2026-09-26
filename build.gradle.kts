@@ -85,6 +85,36 @@ subprojects {
                       id.group != "co.elastic.clients" && !id.group.startsWith("org.elasticsearch")
                     else -> false
                   }
+                ":kervan-observability" ->
+                  when (id) {
+                    is ProjectComponentIdentifier ->
+                      id.buildTreePath == ":kervan-api" || id.buildTreePath == ":kervan-core"
+                    is ModuleComponentIdentifier ->
+                      id.group in
+                        setOf(
+                          "io.micrometer",
+                          "io.opentelemetry",
+                          "org.slf4j",
+                          "org.jspecify",
+                          "org.hdrhistogram",
+                          "org.latencyutils",
+                        )
+                    else -> false
+                  }
+                ":kervan-testkit" ->
+                  when (id) {
+                    is ProjectComponentIdentifier -> id.buildTreePath == ":kervan-api"
+                    is ModuleComponentIdentifier ->
+                      id.group in
+                        setOf(
+                          "org.junit",
+                          "org.junit.jupiter",
+                          "org.junit.platform",
+                          "org.apiguardian",
+                          "org.opentest4j",
+                        )
+                    else -> false
+                  }
                 else -> false
               }
 

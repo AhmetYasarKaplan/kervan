@@ -1,5 +1,6 @@
 package io.github.ahmetyasarkaplan.kervan.spring;
 
+import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -14,8 +15,11 @@ public final class KervanPipelineRegistry implements AutoCloseable {
   private final Map<String, KervanPipelineFactory.PipelineEntry> pipelines;
   private volatile boolean closed;
 
-  KervanPipelineRegistry(KervanProperties properties, ConfigurableListableBeanFactory beanFactory) {
-    pipelines = new KervanPipelineFactory(beanFactory).create(properties);
+  KervanPipelineRegistry(
+      KervanProperties properties,
+      ConfigurableListableBeanFactory beanFactory,
+      PipelineObserver observer) {
+    pipelines = new KervanPipelineFactory(beanFactory, observer).create(properties);
   }
 
   /**

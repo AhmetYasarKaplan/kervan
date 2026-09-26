@@ -5,6 +5,7 @@ import io.github.ahmetyasarkaplan.kervan.api.FailurePolicy;
 import io.github.ahmetyasarkaplan.kervan.api.FusionStrategy;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
 import io.github.ahmetyasarkaplan.kervan.core.IdentityRanker;
+import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
 import io.github.ahmetyasarkaplan.kervan.core.ReciprocalRankFusion;
 import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
@@ -23,9 +24,11 @@ import org.springframework.core.ResolvableType;
 final class KervanPipelineFactory {
 
   private final ConfigurableListableBeanFactory beans;
+  private final PipelineObserver observer;
 
-  KervanPipelineFactory(ConfigurableListableBeanFactory beans) {
+  KervanPipelineFactory(ConfigurableListableBeanFactory beans, PipelineObserver observer) {
     this.beans = beans;
+    this.observer = observer;
   }
 
   Map<String, PipelineEntry> create(KervanProperties properties) {
@@ -59,6 +62,9 @@ final class KervanPipelineFactory {
     }
 
     RankingPipeline.Builder<Object, Object> builder = RankingPipeline.builder(name);
+    if (observer != null) {
+      builder.observer(observer);
+    }
     Set<String> retrieverNames = new HashSet<>();
     TypePair types = new TypePair(null, null);
     long sourceCapacity = 0;

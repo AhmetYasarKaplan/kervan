@@ -1,5 +1,7 @@
 package io.github.ahmetyasarkaplan.kervan.spring;
 
+import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -18,8 +20,10 @@ public class KervanAutoConfiguration {
   @Bean(destroyMethod = "close")
   @ConditionalOnMissingBean
   public KervanPipelineRegistry kervanPipelineRegistry(
-      KervanProperties properties, ConfigurableListableBeanFactory beanFactory) {
-    return new KervanPipelineRegistry(properties, beanFactory);
+      KervanProperties properties,
+      ConfigurableListableBeanFactory beanFactory,
+      ObjectProvider<PipelineObserver> observers) {
+    return new KervanPipelineRegistry(properties, beanFactory, observers.getIfAvailable());
   }
 
   @Configuration(proxyBeanMethods = false)

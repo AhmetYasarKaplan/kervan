@@ -8,10 +8,15 @@ jacoco = "0.8.15"
 elasticsearch = "9.5.0"
 testcontainers = "2.0.5"
 spring-boot = "4.1.1"
+micrometer = "1.17.1"
+opentelemetry = "1.62.0"
+slf4j = "2.0.18"
+logback = "1.5.38"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 elasticsearch-java = { module = "co.elastic.clients:elasticsearch-java", version.ref = "elasticsearch" }
@@ -25,6 +30,11 @@ spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-
 spring-boot-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor", version.ref = "spring-boot" }
 spring-boot-autoconfigure-processor = { module = "org.springframework.boot:spring-boot-autoconfigure-processor", version.ref = "spring-boot" }
 jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations" }
+micrometer-core = { module = "io.micrometer:micrometer-core", version.ref = "micrometer" }
+opentelemetry-api = { module = "io.opentelemetry:opentelemetry-api", version.ref = "opentelemetry" }
+opentelemetry-sdk-testing = { module = "io.opentelemetry:opentelemetry-sdk-testing", version.ref = "opentelemetry" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 
 [plugins]
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

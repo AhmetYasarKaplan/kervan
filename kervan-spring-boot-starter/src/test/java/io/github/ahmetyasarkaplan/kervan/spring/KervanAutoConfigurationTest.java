@@ -9,14 +9,17 @@ import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import io.github.ahmetyasarkaplan.kervan.core.FirstSeenFusion;
+import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.health.contributor.HealthIndicator;
@@ -66,6 +69,21 @@ class KervanAutoConfigurationTest {
               .extracting(contribution -> contribution.source())
               .containsExactly("search", "recommendations");
         });
+  }
+
+  @Test
+  void attachesApplicationObserverBeanToConfiguredPipeline() {
+    yamlRunner
+        .withUserConfiguration(ObserverComponents.class)
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              context
+                  .getBean(KervanPipelineRegistry.class)
+                  .pipeline("sample", String.class, String.class)
+                  .execute("camera");
+              assertThat(context.getBean(AtomicInteger.class)).hasValue(1);
+            });
   }
 
   @Test
@@ -332,6 +350,25 @@ class KervanAutoConfigurationTest {
     @Bean
     CandidateRetriever<String, String> popularityRetriever() {
       return (query, context) -> List.of(SourceCandidate.of("popularity-only", 5.0));
+    }
+  }
+
+  @Configuration(proxyBeanMethods = false)
+  static class ObserverComponents {
+    @Bean
+    AtomicInteger completedPipelines() {
+      return new AtomicInteger();
+    }
+
+    @Bean
+    PipelineObserver pipelineObserver(AtomicInteger completedPipelines) {
+      return name ->
+          new PipelineObserver.Execution() {
+            @Override
+            public void succeeded(boolean partial, Duration duration, int candidates) {
+              completedPipelines.incrementAndGet();
+            }
+          };
     }
   }
 }
