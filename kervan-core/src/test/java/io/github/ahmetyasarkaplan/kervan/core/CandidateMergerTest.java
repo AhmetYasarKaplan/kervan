@@ -3,124 +3,90 @@ package io.github.ahmetyasarkaplan.kervan.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.ahmetyasarkaplan.kervan.api.Candidate;
+import io.github.ahmetyasarkaplan.kervan.api.RetrievalResult;
+import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
+import io.github.ahmetyasarkaplan.kervan.api.SourceContribution;
+import io.github.ahmetyasarkaplan.kervan.api.SourceHit;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class CandidateMergerTest {
 
   @Test
-  void shouldPreserveFirstSeenOrderForUniqueCandidates() {
-    Candidate<String> first = Candidate.of("first", 3.0, "lexical");
-    Candidate<String> second = Candidate.of("second", 2.0, "vector");
-    Candidate<String> third = Candidate.of("third", 1.0, "popularity");
+  void shouldKeepConfiguredProviderAndSourceOrder() {
+    var search = result("search", hit("a", 8.0, 1), hit("shared", 7.0, 2));
+    var recommendations = result("recommendations", hit("shared", 0.8, 1), hit("c", 0.7, 2));
 
-    assertThat(CandidateMerger.merge(List.of(first, second, third)))
-        .containsExactly(first, second, third);
+    var merged = CandidateMerger.merge(List.of(search, recommendations));
+
+    assertThat(merged).extracting(candidate -> candidate.id()).containsExactly("a", "shared", "c");
+    assertThat(merged.get(1).score()).isEqualTo(7.0);
+    assertThat(merged.get(1).contributions())
+        .containsExactly(
+            new SourceContribution("search", 2, 7.0),
+            new SourceContribution("recommendations", 1, 0.8));
   }
 
   @Test
-  void shouldMergeDuplicateIdsAndPreserveProvenance() {
-    Candidate<String> lexical = Candidate.of("shared", 8.0, "lexical");
-    Candidate<String> vector = Candidate.of("shared", 0.85, "vector");
+  void shouldKeepFirstAttributesAndAddNewKeys() {
+    var first = new SourceHit<>(new SourceCandidate<>("same", 2.0, Map.of("category", "books")), 1);
+    var second =
+        new SourceHit<>(
+            new SourceCandidate<>("same", 0.2, Map.of("category", "media", "inStock", true)), 3);
 
-    List<Candidate<String>> result = CandidateMerger.merge(List.of(lexical, vector));
-
-    assertThat(result).hasSize(1);
-    assertThat(result.getFirst().sources()).containsExactlyInAnyOrder("lexical", "vector");
-    assertThat(result.getFirst().sourceScores())
-        .containsEntry("lexical", 8.0)
-        .containsEntry("vector", 0.85);
-  }
-
-  @Test
-  void shouldKeepFirstSeenScoreAndPositionWhenMerging() {
-    Candidate<String> first = Candidate.of("first", 10.0, "lexical");
-    Candidate<String> other = Candidate.of("other", 9.0, "lexical");
-    Candidate<String> duplicate = Candidate.of("first", 20.0, "vector");
-
-    List<Candidate<String>> result = CandidateMerger.merge(List.of(first, other, duplicate));
-
-    assertThat(result).extracting(Candidate::id).containsExactly("first", "other");
-    assertThat(result.getFirst().score()).isEqualTo(10.0);
-  }
-
-  @Test
-  void shouldMergeAttributesUsingFirstValueForConflictingKeys() {
-    Candidate<String> first =
-        new Candidate<>(
-            "shared",
-            8.0,
-            Set.of("lexical"),
-            Map.of("lexical", 8.0),
-            Map.of("category", "books", "language", "en"));
-    Candidate<String> duplicate =
-        new Candidate<>(
-            "shared",
-            0.85,
-            Set.of("vector"),
-            Map.of("vector", 0.85),
-            Map.of("category", "media", "inStock", true));
-
-    Candidate<String> merged = CandidateMerger.merge(List.of(first, duplicate)).getFirst();
+    var merged =
+        CandidateMerger.merge(List.of(result("search", first), result("recommendations", second)))
+            .getFirst();
 
     assertThat(merged.attributes())
         .containsEntry("category", "books")
-        .containsEntry("language", "en")
         .containsEntry("inStock", true);
   }
 
   @Test
-  void shouldAcceptRepeatedIdenticalScoreFromSameSource() {
-    Candidate<String> first = Candidate.of("shared", 4.0, "lexical");
-    Candidate<String> duplicate = Candidate.of("shared", 4.0, "lexical");
+  void shouldIgnoreLaterOccurrenceFromTheSameProvider() {
+    var search = result("search", hit("same", 3.0, 1), hit("same", 9.0, 2));
+    var merged = CandidateMerger.merge(List.of(search));
 
-    assertThat(CandidateMerger.merge(List.of(first, duplicate)))
-        .singleElement()
-        .satisfies(
-            candidate -> {
-              assertThat(candidate.sources()).containsExactly("lexical");
-              assertThat(candidate.sourceScores()).containsExactlyEntriesOf(Map.of("lexical", 4.0));
-            });
-  }
-
-  @Test
-  void shouldRejectConflictingScoresFromSameSourceWithoutExposingCandidateId() {
-    Candidate<String> first = Candidate.of("sensitive-id", 4.0, "lexical");
-    Candidate<String> duplicate = Candidate.of("sensitive-id", 5.0, "lexical");
-
-    assertThatThrownBy(() -> CandidateMerger.merge(List.of(first, duplicate)))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("Conflicting scores for source: lexical")
-        .hasMessageNotContaining("sensitive-id");
+    assertThat(merged).hasSize(1);
+    assertThat(merged.getFirst().score()).isEqualTo(3.0);
+    assertThat(merged.getFirst().contributions())
+        .containsExactly(new SourceContribution("search", 1, 3.0));
   }
 
   @Test
   void shouldReturnAnIndependentUnmodifiableSnapshot() {
-    Candidate<String> candidate = Candidate.of("candidate", 1.0, "source");
-    List<Candidate<String>> input = new ArrayList<>(List.of(candidate));
+    var results = new ArrayList<>(List.of(result("search", hit("a", 1.0, 1))));
+    var merged = CandidateMerger.merge(results);
+    results.clear();
 
-    List<Candidate<String>> result = CandidateMerger.merge(input);
-    input.clear();
-
-    assertThat(result).containsExactly(candidate);
-    assertThatThrownBy(() -> result.add(candidate))
-        .isInstanceOf(UnsupportedOperationException.class);
+    assertThat(merged).hasSize(1);
+    assertThatThrownBy(merged::clear).isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
-  void shouldRejectNullInputAndNullElements() {
-    assertThatThrownBy(() -> CandidateMerger.merge(null))
-        .isInstanceOf(NullPointerException.class)
-        .hasMessage("candidates must not be null");
+  void shouldAcceptEmptyResultsAndRejectNulls() {
+    assertThat(CandidateMerger.merge(List.of())).isEmpty();
+    assertThatThrownBy(() -> CandidateMerger.merge(null)).isInstanceOf(NullPointerException.class);
+    List<RetrievalResult<String>> results = Arrays.asList((RetrievalResult<String>) null);
+    assertThatThrownBy(() -> CandidateMerger.merge(results))
+        .isInstanceOf(NullPointerException.class);
+  }
 
-    List<Candidate<String>> candidates = Arrays.asList((Candidate<String>) null);
-    assertThatThrownBy(() -> CandidateMerger.merge(candidates))
-        .isInstanceOf(NullPointerException.class)
-        .hasMessage("candidates must not contain null elements");
+  private static SourceHit<String> hit(String id, double score, int rank) {
+    return new SourceHit<>(SourceCandidate.of(id, score), rank);
+  }
+
+  @SafeVarargs
+  private static RetrievalResult<String> result(String source, SourceHit<String>... hits) {
+    var candidates = new ArrayList<SourceHit<String>>();
+    for (SourceHit<String> hit : hits) {
+      candidates.add(hit);
+    }
+    return RetrievalResult.success(source, candidates, Duration.ZERO);
   }
 }

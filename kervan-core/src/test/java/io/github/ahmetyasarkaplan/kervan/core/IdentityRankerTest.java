@@ -3,11 +3,13 @@ package io.github.ahmetyasarkaplan.kervan.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.ahmetyasarkaplan.kervan.api.Candidate;
+import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.RankingContext;
+import io.github.ahmetyasarkaplan.kervan.api.SourceContribution;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class IdentityRankerTest {
@@ -16,14 +18,14 @@ class IdentityRankerTest {
   void shouldPreserveCandidateOrderAndTruncateToLimit() {
     IdentityRanker<String, String> ranker = new IdentityRanker<>();
 
-    Candidate<String> c1 = Candidate.of("p1", 10.0, "src");
-    Candidate<String> c2 = Candidate.of("p2", 8.0, "src");
-    Candidate<String> c3 = Candidate.of("p3", 6.0, "src");
+    RankedCandidate<String> c1 = ranked("p1", 10.0);
+    RankedCandidate<String> c2 = ranked("p2", 8.0);
+    RankedCandidate<String> c3 = ranked("p3", 6.0);
 
-    List<Candidate<String>> input = List.of(c1, c2, c3);
+    List<RankedCandidate<String>> input = List.of(c1, c2, c3);
     RankingContext context = RankingContext.of(2);
 
-    List<Candidate<String>> output = ranker.rank("test-query", input, context);
+    List<RankedCandidate<String>> output = ranker.rank("test-query", input, context);
 
     assertThat(output).containsExactly(c1, c2);
   }
@@ -32,11 +34,11 @@ class IdentityRankerTest {
   void shouldReturnAllCandidatesWhenLimitExceedsSize() {
     IdentityRanker<String, String> ranker = new IdentityRanker<>();
 
-    Candidate<String> c1 = Candidate.of("p1", 10.0, "src");
-    List<Candidate<String>> input = List.of(c1);
+    RankedCandidate<String> c1 = ranked("p1", 10.0);
+    List<RankedCandidate<String>> input = List.of(c1);
     RankingContext context = RankingContext.of(10);
 
-    List<Candidate<String>> output = ranker.rank("test-query", input, context);
+    List<RankedCandidate<String>> output = ranker.rank("test-query", input, context);
 
     assertThat(output).containsExactly(c1);
   }
@@ -54,7 +56,7 @@ class IdentityRankerTest {
 
   @Test
   void shouldReturnAnIndependentUnmodifiableSnapshot() {
-    var candidate = Candidate.of("p1", 1.0, "src");
+    var candidate = ranked("p1", 1.0);
     var input = new ArrayList<>(List.of(candidate));
     var output = new IdentityRanker<String, String>().rank(null, input, RankingContext.of(1));
 
@@ -73,9 +75,14 @@ class IdentityRankerTest {
 
   @Test
   void shouldRejectNullSelectedCandidates() {
-    List<Candidate<String>> input = Arrays.asList((Candidate<String>) null);
+    List<RankedCandidate<String>> input = Arrays.asList((RankedCandidate<String>) null);
     assertThatThrownBy(
             () -> new IdentityRanker<String, String>().rank(null, input, RankingContext.of(1)))
         .isInstanceOf(NullPointerException.class);
+  }
+
+  private static RankedCandidate<String> ranked(String id, double score) {
+    return new RankedCandidate<>(
+        id, score, List.of(new SourceContribution("src", 1, score)), Map.of());
   }
 }

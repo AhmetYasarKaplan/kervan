@@ -1,6 +1,6 @@
 package io.github.ahmetyasarkaplan.kervan.core;
 
-import io.github.ahmetyasarkaplan.kervan.api.Candidate;
+import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
 import io.github.ahmetyasarkaplan.kervan.api.RankingContext;
 import java.util.List;
@@ -18,7 +18,8 @@ import java.util.Objects;
 public final class IdentityRanker<Q, ID> implements Ranker<Q, ID> {
 
   @Override
-  public List<Candidate<ID>> rank(Q query, List<Candidate<ID>> candidates, RankingContext context) {
+  public List<RankedCandidate<ID>> rank(
+      Q query, List<RankedCandidate<ID>> candidates, RankingContext context) {
     Objects.requireNonNull(candidates, "candidates must not be null");
     Objects.requireNonNull(context, "context must not be null");
     return List.copyOf(

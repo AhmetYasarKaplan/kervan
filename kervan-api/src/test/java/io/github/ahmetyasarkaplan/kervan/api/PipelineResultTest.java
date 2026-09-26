@@ -16,8 +16,8 @@ import org.junit.jupiter.params.provider.ValueSource;
 class PipelineResultTest {
   @Test
   void shouldCopyCollectionsAndPreserveCandidateOrder() {
-    var first = Candidate.of("first", 1.0, "lexical");
-    var second = Candidate.of("second", 2.0, "lexical");
+    var first = ranked("first", 1.0);
+    var second = ranked("second", 2.0);
     var candidates = new ArrayList<>(List.of(first, second));
     var successes = new HashSet<>(Set.of("lexical"));
     var failures = new HashSet<>(Set.of("vector"));
@@ -133,7 +133,7 @@ class PipelineResultTest {
 
   @Test
   void shouldRejectNullCollectionEntries() {
-    List<Candidate<String>> candidates = Arrays.asList((Candidate<String>) null);
+    List<RankedCandidate<String>> candidates = Arrays.asList((RankedCandidate<String>) null);
     Set<String> stages = new HashSet<>();
     stages.add(null);
     assertThatThrownBy(
@@ -147,5 +147,10 @@ class PipelineResultTest {
     assertThatThrownBy(
             () -> new PipelineResult<>("search", List.of(), true, Duration.ZERO, Set.of(), stages))
         .isInstanceOf(NullPointerException.class);
+  }
+
+  private static RankedCandidate<String> ranked(String id, double score) {
+    return new RankedCandidate<>(
+        id, score, List.of(new SourceContribution("search", 1, score)), java.util.Map.of());
   }
 }

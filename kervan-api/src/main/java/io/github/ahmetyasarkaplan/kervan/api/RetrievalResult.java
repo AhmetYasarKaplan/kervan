@@ -7,18 +7,19 @@ import java.util.Objects;
 /**
  * Encapsulates the outcome of candidate retrieval from a single source.
  *
- * <p>Only {@link RetrievalStatus#SUCCESS} contains candidates, and it must contain at least one.
- * Failure information is limited to the status; exception messages and causes are not retained.
+ * <p>The core creates this result after invoking a retriever. Only {@link RetrievalStatus#SUCCESS}
+ * contains hits, and it must contain at least one. Failure information is limited to the status;
+ * exception messages and causes are not retained.
  *
  * @param <ID> the candidate identifier type.
  * @param retrieverName the stable identifier of the retriever source.
- * @param candidates ordered candidates returned by the retriever (unmodifiable).
+ * @param candidates ordered source hits with their original one-based ranks (unmodifiable).
  * @param duration the wall-clock time taken by the retrieval stage.
  * @param status the operational status of the retrieval.
  */
 public record RetrievalResult<ID>(
     String retrieverName,
-    List<Candidate<ID>> candidates,
+    List<SourceHit<ID>> candidates,
     Duration duration,
     RetrievalStatus status) {
 
@@ -45,8 +46,8 @@ public record RetrievalResult<ID>(
    * Creates a successful retrieval result. If candidates is empty, status is automatically EMPTY.
    */
   public static <ID> RetrievalResult<ID> success(
-      String retrieverName, List<Candidate<ID>> candidates, Duration duration) {
-    List<Candidate<ID>> snapshot =
+      String retrieverName, List<SourceHit<ID>> candidates, Duration duration) {
+    List<SourceHit<ID>> snapshot =
         List.copyOf(Objects.requireNonNull(candidates, "candidates must not be null"));
     RetrievalStatus status = snapshot.isEmpty() ? RetrievalStatus.EMPTY : RetrievalStatus.SUCCESS;
     return new RetrievalResult<>(retrieverName, snapshot, duration, status);

@@ -2,40 +2,74 @@
 
 **Bring candidates from many sources. Return one reliable ranking.**
 
-Kervan is a Java 21 framework for latency-aware retrieval orchestration and rank
-fusion. It is designed for applications that collect candidates from multiple
-sources, combine their rankings, optionally rerank them, and apply result policies
-within explicit latency and candidate budgets.
+Kervan is a Java 21 library for coordinating candidates from independently
+operated providers. An application can combine search, recommendation, popularity,
+or custom provider results into one ranked list with canonical IDs and inspectable
+source contributions.
 
 ## Status
 
-Kervan is under active development. The current development version is `0.1.0-SNAPSHOT`.
-The implemented surface consists of candidate and result models, synchronous
-component contracts, and an identity ranker. Pipeline execution is not implemented.
+Kervan is under active development. The current development version is
+`0.1.0-SNAPSHOT`. The library currently provides a synchronous sequential pipeline,
+provider contracts, first-seen fusion, an identity ranker, candidate limits, and
+source provenance. The public API is still subject to change.
 
 ## Intended request flow
 
 ```text
 Request
-  -> parallel candidate retrieval
-  -> deduplication and provenance
-  -> rank/score fusion
-  -> optional reranking and result policies
+  -> invoke independent providers
+  -> validate and limit each ordered source list
+  -> merge canonical IDs with source ranks and scores
+  -> rank and limit candidates
   -> final ranked results
 ```
 
 The embedded Java library is the primary design target.
 
-Kervan coordinates retrieval and ranking components. Search indexing, embedding
-generation, model training/serving, user-profile services, and large relevance
-experimentation platforms are outside its scope.
+Kervan operates across provider boundaries. A search engine can perform its own
+lexical, vector, and hybrid retrieval inside one provider request; the application
+can then combine that result with independently operated providers. Search indexing,
+embedding generation, and model training/serving are outside Kervan's scope.
+
+## Embedded usage
+
+```java
+import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
+import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
+import io.github.ahmetyasarkaplan.kervan.core.FirstSeenFusion;
+import io.github.ahmetyasarkaplan.kervan.core.IdentityRanker;
+import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
+import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
+import java.util.List;
+
+CandidateRetriever<String, String> search =
+    (query, context) -> List.of(SourceCandidate.of("product-1", 4.2));
+CandidateRetriever<String, String> recommendations =
+    (query, context) -> List.of(SourceCandidate.of("product-1", 0.8));
+
+RankingPipeline<String, String> pipeline =
+    RankingPipeline.<String, String>builder("discovery")
+        .addRetriever(RetrieverSpec.of("search", search, 10))
+        .addRetriever(RetrieverSpec.of("recommendations", recommendations, 10))
+        .fusion(new FirstSeenFusion<>(), 20)
+        .ranker(new IdentityRanker<>(), 20)
+        .resultLimit(10)
+        .build();
+
+var result = pipeline.execute("camera");
+```
+
+`FirstSeenFusion` keeps provider registration order and the first score for each
+canonical ID. It retains the original rank and score contributed by every provider.
+It is a deterministic baseline strategy, not a relevance fusion algorithm.
 
 ## Modules
 
 | Module | Responsibility |
 | --- | --- |
 | `kervan-api` | Public contracts and domain-independent value types |
-| `kervan-core` | Built-in execution components, including `IdentityRanker` |
+| `kervan-core` | Sequential pipeline, builder, first-seen fusion, and identity ranker |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
 Neither module has external production dependencies. The Maven group and Java
@@ -85,3 +119,4 @@ Test and coverage reports are generated under each module:
 - [Architecture and module boundaries](docs/architecture.md)
 - [Java 21 and Gradle](docs/adr/0001-java-21-and-gradle.md)
 - [Framework-independent module boundaries](docs/adr/0002-module-boundaries.md)
+- [Provider boundaries and native search capabilities](docs/adr/0003-provider-boundaries.md)

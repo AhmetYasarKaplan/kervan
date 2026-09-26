@@ -19,5 +19,6 @@ public interface Ranker<Q, ID> {
    * @param context ranking execution parameters including candidate budget limits.
    * @return the reranked candidate list.
    */
-  List<Candidate<ID>> rank(Q query, List<Candidate<ID>> candidates, RankingContext context);
+  List<RankedCandidate<ID>> rank(
+      Q query, List<RankedCandidate<ID>> candidates, RankingContext context);
 }

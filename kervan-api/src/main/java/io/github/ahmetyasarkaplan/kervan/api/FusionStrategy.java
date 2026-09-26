@@ -3,7 +3,7 @@ package io.github.ahmetyasarkaplan.kervan.api;
 import java.util.List;
 
 /**
- * Strategy contract for combining multiple candidate sets into a unified, ranked candidate list.
+ * Combines results from independent providers into a list of ranked canonical candidates.
  *
  * @param <ID> the candidate identifier type.
  */
@@ -15,7 +15,7 @@ public interface FusionStrategy<ID> {
    *
    * @param results list of candidate retrieval results from all executed retrievers.
    * @param context fusion execution settings including output candidate limits.
-   * @return a deterministically ranked list of candidates.
+   * @return a deterministically ranked list of candidates with source contributions.
    */
-  List<Candidate<ID>> fuse(List<RetrievalResult<ID>> results, FusionContext context);
+  List<RankedCandidate<ID>> fuse(List<RetrievalResult<ID>> results, FusionContext context);
 }

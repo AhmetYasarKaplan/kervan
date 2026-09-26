@@ -1,9 +1,23 @@
 # Architecture
 
-## Foundation
+## Provider boundary
 
-Kervan is designed as an embedded retrieval and ranking library structured
-around strict module boundaries and clean separation of concerns.
+Kervan coordinates independently invoked candidate providers at the application
+boundary. A search engine owns retrieval and ranking operations inside its own
+index or document universe. Its adapter can send one native hybrid search request
+and return the ordered hits as one provider list. Kervan can combine that list with
+recommendation, popularity, or other independent provider lists.
+
+Provider adapters map native document or item identifiers into the application's
+canonical candidate ID before returning candidates. The core compares those IDs;
+it does not contain application-specific identity translation. The application
+also owns hydration of full domain entities after receiving ranked IDs.
+
+Where a provider can perform an operation natively and efficiently, its adapter
+should request that behavior from the provider. Kervan does not define a universal
+provider query language. See the [provider-boundary decision](adr/0003-provider-boundaries.md).
+
+## Module boundaries
 
 ```text
 kervan-core -> kervan-api -> JDK
@@ -11,71 +25,68 @@ kervan-core -> kervan-api -> JDK
 
 | Module | Package prefix | Responsibility |
 | --- | --- | --- |
-| `kervan-api` | `io.github.ahmetyasarkaplan.kervan.api` | Public contracts and domain-independent values |
-| `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution |
+| `kervan-api` | `io.github.ahmetyasarkaplan.kervan.api` | Public component contracts and domain-independent values |
+| `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution, built-in components |
 
-## Dependency rules
+API does not depend on core. Neither module depends on Spring, Elasticsearch,
+HTTP frameworks, or infrastructure-specific serialization annotations. Core
+exposes API through Gradle's `api` configuration because public core components
+use API types in their signatures. The `verifyModuleBoundaries` task validates
+resolved production classpaths; root `check` also runs tests and formatting.
 
-- API must not depend on core.
-- Core exposes its API dependency through Gradle's `api` configuration because
-  its public component implementations use API types in their signatures.
-- Neither module may depend on Spring, Elasticsearch, HTTP frameworks, or
-  infrastructure-specific serialization types or annotations.
-- The core modules maintain zero external production dependencies. Test libraries and
-  build tools are separate from the production dependency graph.
-- Infrastructure integrations belong in separate adapter modules that
-  depend on these libraries. They must not introduce reverse dependencies.
+## Candidate model
 
-Each module's `verifyModuleBoundaries` task checks its resolved compile and runtime
-classpaths. The root `check` includes these checks, both modules' tests and coverage
-tasks, and repository formatting. No Java module descriptors are introduced;
-module boundaries currently refer to Gradle projects and Java packages.
+`CandidateRetriever<Q, ID>` returns an ordered `List<SourceCandidate<ID>>` for one
+provider. Each source candidate has a canonical ID, a finite score, and small
+optional attributes. The retriever does not set its name, measured duration, or
+execution status. Its `RetrievalContext` carries a positive requested candidate
+limit.
 
-## Package and API rules
+The core assigns a one-based `SourceHit.rank` from each candidate's original list
+position. Within one provider list, the first occurrence of a canonical ID wins.
+The limit applies to unique IDs after duplicate removal; original ranks retain
+their positions, so rank numbers can have gaps. The core validates the full list,
+then retains at most the configured number of unique candidates.
 
-Public contracts belong in the API package. Core owns the execution engine and
-keeps implementation details package-private wherever possible. Exported types
-must be deliberate; a public core implementation should not become an extension
-contract accidentally.
+`RetrievalResult` contains the provider name, source hits, measured duration, and
+status. A successful nonempty result is `SUCCESS`; a successful empty result is
+`EMPTY`. Other status values exist in the model but are not produced by the
+sequential pipeline. Provider exceptions currently propagate to the caller.
 
-Java 21 is the compile and test baseline. Preview language/runtime features are
-disabled. Java source and tests use the standard `src/main/java` and
-`src/test/java` layouts.
+`RankedCandidate` represents the result after cross-provider fusion. It contains
+the canonical ID, current score, and ordered `SourceContribution` values holding
+each provider's original rank and score. The final rank is the candidate's
+one-based position in the result list. Candidate and result collections are
+unmodifiable snapshots; IDs and attribute values are not deep copied, so callers
+should use immutable values.
 
-## Candidate and result invariants
+## Sequential execution
 
-`Candidate` requires a non-null ID and finite current and source scores. Negative
-finite scores are valid. Collections are defensively copied and unmodifiable;
-IDs and attribute values are not deep copied. Callers should use immutable values.
-Set and map iteration order does not define candidate ranking.
+```text
+provider list in registration order
+  -> validate, remove within-provider duplicates, and cap unique candidates
+  -> create core-measured retrieval results
+  -> fuse equal canonical IDs across providers
+  -> rank and apply the final candidate limit
+  -> pipeline result
+```
 
-`RetrievalResult` enforces the same invariants through its constructor and factory
-methods:
+`RankingPipeline` requires at least one named retriever, an explicit fusion
+strategy, an explicit ranker, and a positive result limit. Retriever names must
+be unique. It invokes retrievers in registration order and passes their completed
+results to fusion in that same order. Later stage outputs are capped to their
+configured limits, and duplicate IDs returned by custom fusion or ranker stages
+are rejected.
 
-| Status | Candidates | Meaning |
-| --- | --- | --- |
-| `SUCCESS` | At least one | Successful retrieval with results |
-| `EMPTY` | None | Successful retrieval without results |
-| `FAILED` | None | Retrieval failure |
-| `TIMED_OUT` | None | Retrieval timeout |
+`FirstSeenFusion` is the baseline strategy: the first provider occurrence
+determines final position and score. Contributions from later providers are
+appended in provider order, and attributes from the first occurrence of each key
+win. `IdentityRanker` preserves this order while applying its candidate limit.
+This baseline does not calculate a relevance-fusion score.
 
-Retriever names must be non-blank and durations non-negative. Failure information
-is limited to status values. Results do not carry exception messages, causes, or
-stack traces.
-
-`PipelineResult` preserves candidate order and copies its collections. Successful
-and failed stage sets must be disjoint and contain non-blank names. `isPartial`
-must be true exactly when there are failed stages. Empty candidate lists are valid
-for both complete and partial results; stage outcomes distinguish the two.
-
-## Execution contracts
-
-`Retriever`, `FusionStrategy`, and `Ranker` are synchronous, generic contracts.
-They describe individual components rather than orchestrating a pipeline.
-Their contexts require positive candidate limits. `RetrievalContext` accepts a
-non-negative timeout budget, including zero; the context itself does not enforce
-timing, schedule work, or cancel it.
-
-`IdentityRanker` lives in core. It selects the leading candidates up to the ranking
-limit without reordering or rescoring them, returning an unmodifiable snapshot.
-Selected candidates must be non-null; the unused query may be null.
+A successful sequential execution returns a non-partial `PipelineResult` with
+successful provider names and total duration. It does not run providers in
+parallel or enforce deadlines or failure policies. `PipelineResult` validates
+that successful and failed stage sets do not overlap and that `isPartial` agrees
+with the presence of failed stages. No raw exception information is stored in
+the result.

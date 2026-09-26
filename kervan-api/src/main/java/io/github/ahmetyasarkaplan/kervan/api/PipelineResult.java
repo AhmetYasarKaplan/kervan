@@ -22,7 +22,7 @@ import java.util.Set;
  */
 public record PipelineResult<ID>(
     String pipelineName,
-    List<Candidate<ID>> candidates,
+    List<RankedCandidate<ID>> candidates,
     boolean isPartial,
     Duration duration,
     Set<String> successfulStages,
