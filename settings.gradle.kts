@@ -9,4 +9,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "kervan"
 
-include("kervan-api", "kervan-core", "kervan-elasticsearch")
+include("kervan-api", "kervan-core", "kervan-elasticsearch", "kervan-spring-boot-starter")

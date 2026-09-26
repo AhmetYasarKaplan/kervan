@@ -1,4 +1,5 @@
 import org.gradle.api.artifacts.component.ComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
 import org.gradle.api.tasks.testing.Test
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
@@ -76,6 +77,14 @@ subprojects {
                   id is ProjectComponentIdentifier && id.buildTreePath == ":kervan-api"
                 ":kervan-elasticsearch" ->
                   id !is ProjectComponentIdentifier || id.buildTreePath == ":kervan-api"
+                ":kervan-spring-boot-starter" ->
+                  when (id) {
+                    is ProjectComponentIdentifier ->
+                      id.buildTreePath == ":kervan-api" || id.buildTreePath == ":kervan-core"
+                    is ModuleComponentIdentifier ->
+                      id.group != "co.elastic.clients" && !id.group.startsWith("org.elasticsearch")
+                    else -> false
+                  }
                 else -> false
               }
 

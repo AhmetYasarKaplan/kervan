@@ -23,6 +23,8 @@ provider query language. See the [provider-boundary decision](adr/0003-provider-
 kervan-core          -> kervan-api -> JDK
 kervan-elasticsearch -> kervan-api
                      -> Elasticsearch Java client
+kervan-spring-boot-starter -> kervan-core -> kervan-api
+                           -> Spring Boot
 ```
 
 | Module | Package prefix | Responsibility |
@@ -30,6 +32,7 @@ kervan-elasticsearch -> kervan-api
 | `kervan-api` | `io.github.ahmetyasarkaplan.kervan.api` | Public component contracts and domain-independent values |
 | `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution, built-in components |
 | `kervan-elasticsearch` | `io.github.ahmetyasarkaplan.kervan.elasticsearch` | Native search request adapter and canonical hit mapping |
+| `kervan-spring-boot-starter` | `io.github.ahmetyasarkaplan.kervan.spring` | Configured pipeline assembly, component lookup, and conditional health integration |
 
 API does not depend on core. Neither API nor core depends on Spring, Elasticsearch,
 HTTP frameworks, or infrastructure-specific serialization annotations. Core
@@ -42,6 +45,13 @@ from application code, applies the candidate limit and server-side timeout,
 then maps ordered hits to canonical IDs. Its client dependency stays outside
 API and core. One native Elasticsearch hybrid response is one Kervan provider
 list; Kervan's fusion combines that list with other independent providers.
+
+The Spring Boot starter binds `kervan.pipelines` settings and resolves named
+application beans to build pipelines at context startup. It owns their lifecycle
+through a registry and exposes a health indicator when Spring Boot's health
+types are present.
+It does not add Spring dependencies to API or core or create a search provider
+from YAML. See the [Spring Boot guide](spring-boot.md).
 
 ## Candidate model
 

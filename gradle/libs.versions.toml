@@ -7,6 +7,7 @@ ktfmt = "0.64"
 jacoco = "0.8.15"
 elasticsearch = "9.5.0"
 testcontainers = "2.0.5"
+spring-boot = "4.1.1"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
@@ -15,6 +16,15 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 elasticsearch-java = { module = "co.elastic.clients:elasticsearch-java", version.ref = "elasticsearch" }
 testcontainers-elasticsearch = { module = "org.testcontainers:testcontainers-elasticsearch", version.ref = "testcontainers" }
+spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
+spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure" }
+spring-boot-health = { module = "org.springframework.boot:spring-boot-health" }
+spring-boot-test = { module = "org.springframework.boot:spring-boot-test" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
+spring-boot-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor", version.ref = "spring-boot" }
+spring-boot-autoconfigure-processor = { module = "org.springframework.boot:spring-boot-autoconfigure-processor", version.ref = "spring-boot" }
+jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations" }
 
 [plugins]
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

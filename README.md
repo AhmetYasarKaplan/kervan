@@ -13,7 +13,8 @@ Kervan is under active development. The current development version is
 `0.1.0-SNAPSHOT`. The library provides a synchronous pipeline with concurrent
 provider calls, time budgets, failure policies, reciprocal rank and weighted
 score fusion, an Elasticsearch adapter, an identity ranker, candidate limits,
-and source provenance. The public API is still subject to change.
+source provenance, and Spring Boot configuration. The public API is still
+subject to change.
 
 ## Intended request flow
 
@@ -88,11 +89,14 @@ in-memory lambdas; it does not contact an external provider.
 | `kervan-api` | Public contracts and domain-independent value types |
 | `kervan-core` | Concurrent pipeline, time budgets, failure handling, built-in fusion strategies, and identity ranker |
 | `kervan-elasticsearch` | Official-client adapter that maps one Elasticsearch search response into a provider list |
+| `kervan-spring-boot-starter` | Auto-configuration that assembles named pipelines from properties and application beans |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
 `kervan-elasticsearch` depends on `kervan-api` and the pinned official Java
 client. API and core have no external production dependencies. The Maven group
 and Java package prefix are `io.github.ahmetyasarkaplan.kervan`.
+The Spring Boot starter depends on core and Spring Boot, while the Elasticsearch
+adapter remains an independent optional module.
 
 ## Build locally
 
@@ -137,6 +141,8 @@ Test and coverage reports are generated under each module:
 
 See the [Elasticsearch adapter guide](docs/elasticsearch.md) for a native hybrid
 request combined with an independent provider.
+See the [Spring Boot guide](docs/spring-boot.md) for YAML configuration, custom
+beans, validation, and lifecycle.
 
 ## Design documentation
 
