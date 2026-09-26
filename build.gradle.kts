@@ -71,9 +71,13 @@ subprojects {
             val incoming = configuration.incoming
             val rootId = incoming.resolutionResult.rootComponent.get().id
             fun isAllowed(id: ComponentIdentifier): Boolean =
-              modulePath == ":kervan-core" &&
-                id is ProjectComponentIdentifier &&
-                id.buildTreePath == ":kervan-api"
+              when (modulePath) {
+                ":kervan-core" ->
+                  id is ProjectComponentIdentifier && id.buildTreePath == ":kervan-api"
+                ":kervan-elasticsearch" ->
+                  id !is ProjectComponentIdentifier || id.buildTreePath == ":kervan-api"
+                else -> false
+              }
 
             val forbidden =
               (incoming.resolutionResult.allComponents.map { it.id }.filter { it != rootId } +

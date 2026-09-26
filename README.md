@@ -12,8 +12,8 @@ source contributions.
 Kervan is under active development. The current development version is
 `0.1.0-SNAPSHOT`. The library provides a synchronous pipeline with concurrent
 provider calls, time budgets, failure policies, reciprocal rank and weighted
-score fusion, an identity ranker, candidate limits, and source provenance. The
-public API is still subject to change.
+score fusion, an Elasticsearch adapter, an identity ranker, candidate limits,
+and source provenance. The public API is still subject to change.
 
 ## Intended request flow
 
@@ -87,17 +87,21 @@ in-memory lambdas; it does not contact an external provider.
 | --- | --- |
 | `kervan-api` | Public contracts and domain-independent value types |
 | `kervan-core` | Concurrent pipeline, time budgets, failure handling, built-in fusion strategies, and identity ranker |
+| `kervan-elasticsearch` | Official-client adapter that maps one Elasticsearch search response into a provider list |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
-Neither module has external production dependencies. The Maven group and Java
-package prefix are `io.github.ahmetyasarkaplan.kervan`.
+`kervan-elasticsearch` depends on `kervan-api` and the pinned official Java
+client. API and core have no external production dependencies. The Maven group
+and Java package prefix are `io.github.ahmetyasarkaplan.kervan`.
 
 ## Build locally
 
 Install a JDK 21 and make it available through `JAVA_HOME` or `PATH`. The build
 uses a Java 21 toolchain and does not download JDKs automatically. Git and network
 access to the Gradle distribution, Plugin Portal, and Maven Central are needed
-for an initial checkout and build. A separate Gradle installation is unnecessary.
+for an initial checkout and build. Docker is required for the Elasticsearch
+integration tests included in `check`. A separate Gradle installation is
+unnecessary.
 
 ```sh
 java -version
@@ -131,6 +135,9 @@ Test and coverage reports are generated under each module:
 - Coverage: `build/reports/jacoco/test/html/index.html`
 - Coverage XML: `build/reports/jacoco/test/jacocoTestReport.xml`
 
+See the [Elasticsearch adapter guide](docs/elasticsearch.md) for a native hybrid
+request combined with an independent provider.
+
 ## Design documentation
 
 - [Architecture and module boundaries](docs/architecture.md)
@@ -139,3 +146,4 @@ Test and coverage reports are generated under each module:
 - [Provider boundaries and native search capabilities](docs/adr/0003-provider-boundaries.md)
 - [Deadlines and failure policies](docs/adr/0004-deadlines-and-failure-policies.md)
 - [Cross-provider fusion](docs/adr/0005-cross-provider-fusion.md)
+- [Elasticsearch adapter boundary](docs/adr/0006-elasticsearch-adapter.md)

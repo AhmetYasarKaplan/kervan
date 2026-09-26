@@ -20,19 +20,28 @@ provider query language. See the [provider-boundary decision](adr/0003-provider-
 ## Module boundaries
 
 ```text
-kervan-core -> kervan-api -> JDK
+kervan-core          -> kervan-api -> JDK
+kervan-elasticsearch -> kervan-api
+                     -> Elasticsearch Java client
 ```
 
 | Module | Package prefix | Responsibility |
 | --- | --- | --- |
 | `kervan-api` | `io.github.ahmetyasarkaplan.kervan.api` | Public component contracts and domain-independent values |
 | `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution, built-in components |
+| `kervan-elasticsearch` | `io.github.ahmetyasarkaplan.kervan.elasticsearch` | Native search request adapter and canonical hit mapping |
 
-API does not depend on core. Neither module depends on Spring, Elasticsearch,
+API does not depend on core. Neither API nor core depends on Spring, Elasticsearch,
 HTTP frameworks, or infrastructure-specific serialization annotations. Core
 exposes API through Gradle's `api` configuration because public core components
 use API types in their signatures. The `verifyModuleBoundaries` task validates
 resolved production classpaths; root `check` also runs tests and formatting.
+
+The Elasticsearch adapter accepts a provider-native `SearchRequest.Builder`
+from application code, applies the candidate limit and server-side timeout,
+then maps ordered hits to canonical IDs. Its client dependency stays outside
+API and core. One native Elasticsearch hybrid response is one Kervan provider
+list; Kervan's fusion combines that list with other independent providers.
 
 ## Candidate model
 
