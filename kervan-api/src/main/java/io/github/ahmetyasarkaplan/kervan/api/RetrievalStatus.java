@@ -12,5 +12,11 @@ public enum RetrievalStatus {
   FAILED,
 
   /** The retriever exceeded its allocated timeout budget. */
-  TIMED_OUT
+  TIMED_OUT,
+
+  /** The pipeline's global deadline elapsed before this retriever finished. */
+  DEADLINE_EXCEEDED,
+
+  /** The pipeline stopped waiting for this retriever after a fatal outcome or closure. */
+  CANCELLED
 }

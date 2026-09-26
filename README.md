@@ -10,16 +10,18 @@ source contributions.
 ## Status
 
 Kervan is under active development. The current development version is
-`0.1.0-SNAPSHOT`. The library currently provides a synchronous sequential pipeline,
-provider contracts, first-seen fusion, an identity ranker, candidate limits, and
-source provenance. The public API is still subject to change.
+`0.1.0-SNAPSHOT`. The library provides a synchronous pipeline with concurrent
+provider calls, time budgets, failure policies, first-seen fusion, an identity
+ranker, candidate limits, and source provenance. The public API is still subject
+to change.
 
 ## Intended request flow
 
 ```text
 Request
-  -> invoke independent providers
+  -> invoke independent providers concurrently within a deadline
   -> validate and limit each ordered source list
+  -> classify provider success, failure, and timeout
   -> merge canonical IDs with source ranks and scores
   -> rank and limit candidates
   -> final ranked results
@@ -36,11 +38,13 @@ embedding generation, and model training/serving are outside Kervan's scope.
 
 ```java
 import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
+import io.github.ahmetyasarkaplan.kervan.api.FailurePolicy;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import io.github.ahmetyasarkaplan.kervan.core.FirstSeenFusion;
 import io.github.ahmetyasarkaplan.kervan.core.IdentityRanker;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
 import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
+import java.time.Duration;
 import java.util.List;
 
 CandidateRetriever<String, String> search =
@@ -48,28 +52,36 @@ CandidateRetriever<String, String> search =
 CandidateRetriever<String, String> recommendations =
     (query, context) -> List.of(SourceCandidate.of("product-1", 0.8));
 
-RankingPipeline<String, String> pipeline =
+try (RankingPipeline<String, String> pipeline =
     RankingPipeline.<String, String>builder("discovery")
-        .addRetriever(RetrieverSpec.of("search", search, 10))
-        .addRetriever(RetrieverSpec.of("recommendations", recommendations, 10))
+        .addRetriever(RetrieverSpec.required("search", search, 10, Duration.ofMillis(140)))
+        .addRetriever(
+            RetrieverSpec.optional("recommendations", recommendations, 10, Duration.ofMillis(100)))
         .fusion(new FirstSeenFusion<>(), 20)
         .ranker(new IdentityRanker<>(), 20)
         .resultLimit(10)
-        .build();
+        .timeout(Duration.ofMillis(250))
+        .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
+        .build()) {
 
-var result = pipeline.execute("camera");
+    var result = pipeline.execute("camera");
+    // result.candidates() contains ranked IDs and source contributions.
+    // result.retrievalResults() contains each provider's status and duration.
+}
 ```
 
 `FirstSeenFusion` keeps provider registration order and the first score for each
 canonical ID. It retains the original rank and score contributed by every provider.
 It is a deterministic baseline strategy, not a relevance fusion algorithm.
+Retriever implementations are supplied by the application. The example uses
+in-memory lambdas; it does not contact an external provider.
 
 ## Modules
 
 | Module | Responsibility |
 | --- | --- |
 | `kervan-api` | Public contracts and domain-independent value types |
-| `kervan-core` | Sequential pipeline, builder, first-seen fusion, and identity ranker |
+| `kervan-core` | Concurrent pipeline, time budgets, failure handling, first-seen fusion, and identity ranker |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
 Neither module has external production dependencies. The Maven group and Java
@@ -120,3 +132,4 @@ Test and coverage reports are generated under each module:
 - [Java 21 and Gradle](docs/adr/0001-java-21-and-gradle.md)
 - [Framework-independent module boundaries](docs/adr/0002-module-boundaries.md)
 - [Provider boundaries and native search capabilities](docs/adr/0003-provider-boundaries.md)
+- [Deadlines and failure policies](docs/adr/0004-deadlines-and-failure-policies.md)

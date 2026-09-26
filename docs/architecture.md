@@ -40,7 +40,7 @@ resolved production classpaths; root `check` also runs tests and formatting.
 provider. Each source candidate has a canonical ID, a finite score, and small
 optional attributes. The retriever does not set its name, measured duration, or
 execution status. Its `RetrievalContext` carries a positive requested candidate
-limit.
+limit and the smaller remaining per-provider and global time budgets.
 
 The core assigns a one-based `SourceHit.rank` from each candidate's original list
 position. Within one provider list, the first occurrence of a canonical ID wins.
@@ -50,8 +50,9 @@ then retains at most the configured number of unique candidates.
 
 `RetrievalResult` contains the provider name, source hits, measured duration, and
 status. A successful nonempty result is `SUCCESS`; a successful empty result is
-`EMPTY`. Other status values exist in the model but are not produced by the
-sequential pipeline. Provider exceptions currently propagate to the caller.
+`EMPTY`. Provider exceptions become `FAILED` without retaining their messages.
+The core separately classifies per-provider `TIMED_OUT`, global
+`DEADLINE_EXCEEDED`, and work `CANCELLED` after a fatal outcome or closure.
 
 `RankedCandidate` represents the result after cross-provider fusion. It contains
 the canonical ID, current score, and ordered `SourceContribution` values holding
@@ -60,23 +61,24 @@ one-based position in the result list. Candidate and result collections are
 unmodifiable snapshots; IDs and attribute values are not deep copied, so callers
 should use immutable values.
 
-## Sequential execution
+## Execution and failure handling
 
 ```text
-provider list in registration order
+provider list fanned out concurrently on virtual threads
   -> validate, remove within-provider duplicates, and cap unique candidates
   -> create core-measured retrieval results
+  -> collect outcomes in registration order
   -> fuse equal canonical IDs across providers
   -> rank and apply the final candidate limit
   -> pipeline result
 ```
 
 `RankingPipeline` requires at least one named retriever, an explicit fusion
-strategy, an explicit ranker, and a positive result limit. Retriever names must
-be unique. It invokes retrievers in registration order and passes their completed
-results to fusion in that same order. Later stage outputs are capped to their
-configured limits, and duplicate IDs returned by custom fusion or ranker stages
-are rejected.
+strategy, ranker, positive result limit, global timeout, and failure policy.
+Retriever names must be unique. Each retriever specifies a positive timeout and
+whether it is required. Calls run concurrently, while fusion receives outcomes in
+registration order. Later stage outputs are capped to their configured limits;
+duplicate IDs returned by custom fusion or ranker stages fail the pipeline.
 
 `FirstSeenFusion` is the baseline strategy: the first provider occurrence
 determines final position and score. Contributions from later providers are
@@ -84,9 +86,32 @@ appended in provider order, and attributes from the first occurrence of each key
 win. `IdentityRanker` preserves this order while applying its candidate limit.
 This baseline does not calculate a relevance-fusion score.
 
-A successful sequential execution returns a non-partial `PipelineResult` with
-successful provider names and total duration. It does not run providers in
-parallel or enforce deadlines or failure policies. `PipelineResult` validates
-that successful and failed stage sets do not overlap and that `isPartial` agrees
-with the presence of failed stages. No raw exception information is stored in
-the result.
+A pipeline owns one reusable virtual-thread executor, accepts concurrent
+`execute` calls, and must be closed when it is no longer needed. Closing stops
+new calls and interrupts in-flight work. Interruption is best effort: a provider
+or remote server may continue running after Kervan stops waiting.
+
+Under `PARTIAL_RESULTS`, optional failure or timeout produces a partial result
+when at least one provider completed successfully, including an empty success.
+Required failure or timeout, or total provider failure, throws
+`PipelineExecutionException`. Under `FAIL_FAST`, any failure or timeout throws and
+remaining work is cancelled. An interrupted caller and a closed pipeline also
+stop execution. The exception reports sanitized reasons and per-provider status;
+it does not include provider messages. A successful `PipelineResult` exposes
+provider outcomes, duration, derived success/failure/timeout names, and whether
+it is partial.
+
+| Policy | Provider outcome | Pipeline outcome |
+| --- | --- | --- |
+| `PARTIAL_RESULTS` | Optional failure or timeout, with another successful or empty provider | Partial result |
+| `PARTIAL_RESULTS` | Required failure or timeout | `REQUIRED_RETRIEVER_FAILED` |
+| `PARTIAL_RESULTS` | All providers fail or time out | `ALL_RETRIEVERS_FAILED` |
+| `FAIL_FAST` | Any provider fails or times out | `FAIL_FAST`; unfinished work is cancelled |
+| Either | All providers succeed, including empty results | Complete result |
+
+The global deadline stops waiting for unfinished providers. A finalization grace
+of at most 25 ms, also capped at one quarter of the configured timeout, allows
+already completed results to be fused and ranked. Custom fusion or ranking code
+that exceeds this bounded interval is cancelled and the pipeline fails with
+`GLOBAL_DEADLINE_EXCEEDED`. This grace means total elapsed time can slightly
+exceed the configured timeout.

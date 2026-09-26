@@ -28,7 +28,7 @@ class RetrievalResultTest {
   }
 
   @Test
-  void shouldDistinguishEmptyFailureAndTimeout() {
+  void shouldDistinguishEmptyFailureTimeoutDeadlineAndCancellation() {
     assertThat(RetrievalResult.success("search", List.of(), Duration.ZERO).status())
         .isEqualTo(RetrievalStatus.EMPTY);
     assertThat(RetrievalResult.empty("search", Duration.ZERO).status())
@@ -37,6 +37,10 @@ class RetrievalResultTest {
         .isEqualTo(RetrievalStatus.FAILED);
     assertThat(RetrievalResult.timedOut("search", Duration.ZERO).status())
         .isEqualTo(RetrievalStatus.TIMED_OUT);
+    assertThat(RetrievalResult.deadlineExceeded("search", Duration.ZERO).status())
+        .isEqualTo(RetrievalStatus.DEADLINE_EXCEEDED);
+    assertThat(RetrievalResult.cancelled("search", Duration.ZERO).status())
+        .isEqualTo(RetrievalStatus.CANCELLED);
   }
 
   @Test
@@ -75,7 +79,7 @@ class RetrievalResultTest {
   @ParameterizedTest
   @EnumSource(
       value = RetrievalStatus.class,
-      names = {"EMPTY", "FAILED", "TIMED_OUT"})
+      names = {"EMPTY", "FAILED", "TIMED_OUT", "DEADLINE_EXCEEDED", "CANCELLED"})
   void shouldRejectHitsForNonSuccessStatus(RetrievalStatus status) {
     assertThatThrownBy(
             () -> new RetrievalResult<>("search", List.of(hit("id", 1)), Duration.ZERO, status))

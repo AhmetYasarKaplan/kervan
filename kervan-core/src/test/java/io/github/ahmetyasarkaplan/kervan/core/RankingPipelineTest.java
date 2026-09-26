@@ -4,13 +4,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
+import io.github.ahmetyasarkaplan.kervan.api.FailurePolicy;
 import io.github.ahmetyasarkaplan.kervan.api.FusionContext;
+import io.github.ahmetyasarkaplan.kervan.api.PipelineExecutionException;
 import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalStatus;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.SourceContribution;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,7 +24,7 @@ class RankingPipelineTest {
 
   @Test
   void shouldCombineTwoIndependentProvidersSequentiallyWithProvenance() {
-    List<String> calls = new ArrayList<>();
+    List<String> calls = Collections.synchronizedList(new ArrayList<>());
     CandidateRetriever<String, String> search =
         (query, context) -> {
           calls.add("search:" + query + ":" + context.candidateLimit());
@@ -33,16 +37,20 @@ class RankingPipelineTest {
         };
     var pipeline =
         RankingPipeline.<String, String>builder("discovery")
-            .addRetriever(RetrieverSpec.of("search", search, 10))
-            .addRetriever(RetrieverSpec.of("recommendations", recommendations, 5))
+            .addRetriever(RetrieverSpec.required("search", search, 10, Duration.ofSeconds(5)))
+            .addRetriever(
+                RetrieverSpec.required(
+                    "recommendations", recommendations, 5, Duration.ofSeconds(5)))
             .fusion(new FirstSeenFusion<>(), 10)
             .ranker(new IdentityRanker<>(), 10)
             .resultLimit(10)
+            .timeout(Duration.ofSeconds(5))
+            .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
             .build();
 
     var result = pipeline.execute("camera");
 
-    assertThat(calls).containsExactly("search:camera:10", "recommendations:camera:5");
+    assertThat(calls).containsExactlyInAnyOrder("search:camera:10", "recommendations:camera:5");
     assertThat(result.candidates())
         .extracting(RankedCandidate::id)
         .containsExactly("a", "shared", "c");
@@ -89,7 +97,7 @@ class RankingPipelineTest {
     CandidateRetriever<String, String> empty = (query, context) -> List.of();
     var pipeline =
         RankingPipeline.<String, String>builder("discovery")
-            .addRetriever(RetrieverSpec.of("search", empty, 1))
+            .addRetriever(RetrieverSpec.required("search", empty, 1, Duration.ofSeconds(5)))
             .fusion(
                 (results, context) -> {
                   captured.set(results.getFirst().status());
@@ -99,6 +107,8 @@ class RankingPipelineTest {
                 1)
             .ranker(new IdentityRanker<>(), 1)
             .resultLimit(1)
+            .timeout(Duration.ofSeconds(5))
+            .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
             .build();
 
     pipeline.execute("query");
@@ -118,13 +128,15 @@ class RankingPipelineTest {
                 SourceCandidate.of("c", 3.0));
     var pipeline =
         RankingPipeline.<String, String>builder("discovery")
-            .addRetriever(RetrieverSpec.of("search", search, 10))
+            .addRetriever(RetrieverSpec.required("search", search, 10, Duration.ofSeconds(5)))
             .fusion(new FirstSeenFusion<>(), 3)
             .ranker(
                 (query, candidates, context) ->
                     List.of(candidates.get(2), candidates.get(1), candidates.get(0)),
                 2)
             .resultLimit(1)
+            .timeout(Duration.ofSeconds(5))
+            .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
             .build();
 
     assertThat(pipeline.execute("query").candidates())
@@ -143,7 +155,7 @@ class RankingPipelineTest {
                 SourceCandidate.of("c", 1.0));
     var pipeline =
         RankingPipeline.<String, String>builder("discovery")
-            .addRetriever(RetrieverSpec.of("search", search, 3))
+            .addRetriever(RetrieverSpec.required("search", search, 3, Duration.ofSeconds(5)))
             .fusion(
                 (results, context) ->
                     new FirstSeenFusion<String>().fuse(results, FusionContext.of(3)),
@@ -155,6 +167,8 @@ class RankingPipelineTest {
                 },
                 2)
             .resultLimit(2)
+            .timeout(Duration.ofSeconds(5))
+            .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
             .build();
 
     var result = pipeline.execute("query");
@@ -169,12 +183,13 @@ class RankingPipelineTest {
         (query, context) -> List.of(SourceCandidate.of("a", 1.0));
     var builder =
         RankingPipeline.<String, String>builder("discovery")
-            .addRetriever(RetrieverSpec.of("search", search, 1))
+            .addRetriever(RetrieverSpec.required("search", search, 1, Duration.ofSeconds(5)))
             .fusion(new FirstSeenFusion<>(), 1)
             .ranker(new IdentityRanker<>(), 1)
             .resultLimit(1);
-    var pipeline = builder.build();
-    builder.addRetriever(RetrieverSpec.of("later", search, 1));
+    var pipeline =
+        builder.timeout(Duration.ofSeconds(5)).failurePolicy(FailurePolicy.PARTIAL_RESULTS).build();
+    builder.addRetriever(RetrieverSpec.required("later", search, 1, Duration.ofSeconds(5)));
     assertThat(pipeline.execute("query").successfulStages()).containsExactly("search");
   }
 
@@ -183,33 +198,51 @@ class RankingPipelineTest {
     CandidateRetriever<String, String> empty = (query, context) -> List.of();
     assertThatThrownBy(() -> RankingPipeline.<String, String>builder(" "))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> RetrieverSpec.of("search", empty, 0))
+    assertThatThrownBy(() -> RetrieverSpec.required("search", empty, 0, Duration.ofSeconds(5)))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> RetrieverSpec.of(" ", empty, 1))
+    assertThatThrownBy(() -> RetrieverSpec.required(" ", empty, 1, Duration.ofSeconds(5)))
         .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> RetrieverSpec.required("search", empty, 1, Duration.ZERO))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> RetrieverSpec.optional("search", empty, 1, Duration.ofNanos(-1)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> RetrieverSpec.required("search", empty, 1, null))
+        .isInstanceOf(NullPointerException.class);
+    assertThatThrownBy(
+            () -> RankingPipeline.<String, String>builder("discovery").timeout(Duration.ZERO))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> RankingPipeline.<String, String>builder("discovery").failurePolicy(null))
+        .isInstanceOf(NullPointerException.class);
     assertThatThrownBy(
             () ->
                 RankingPipeline.<String, String>builder("discovery")
                     .fusion(new FirstSeenFusion<>(), 1)
                     .ranker(new IdentityRanker<>(), 1)
                     .resultLimit(1)
+                    .timeout(Duration.ofSeconds(5))
+                    .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
                     .build())
         .isInstanceOf(IllegalStateException.class);
     assertThatThrownBy(
             () ->
                 RankingPipeline.<String, String>builder("discovery")
-                    .addRetriever(RetrieverSpec.of("search", empty, 1))
-                    .addRetriever(RetrieverSpec.of("search", empty, 1))
+                    .addRetriever(RetrieverSpec.required("search", empty, 1, Duration.ofSeconds(5)))
+                    .addRetriever(RetrieverSpec.required("search", empty, 1, Duration.ofSeconds(5)))
                     .fusion(new FirstSeenFusion<>(), 1)
                     .ranker(new IdentityRanker<>(), 1)
                     .resultLimit(1)
+                    .timeout(Duration.ofSeconds(5))
+                    .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
                     .build())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("unique");
     assertThatThrownBy(
             () ->
                 RankingPipeline.<String, String>builder("discovery")
-                    .addRetriever(RetrieverSpec.of("search", empty, 1))
+                    .addRetriever(RetrieverSpec.required("search", empty, 1, Duration.ofSeconds(5)))
+                    .timeout(Duration.ofSeconds(5))
+                    .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
                     .build())
         .isInstanceOf(IllegalStateException.class);
   }
@@ -218,22 +251,24 @@ class RankingPipelineTest {
   void shouldRejectInvalidProviderOutputsAndAvoidFalseSuccess() {
     CandidateRetriever<String, String> nullList = (query, context) -> null;
     assertThatThrownBy(() -> pipeline(nullList, 2).execute("query"))
-        .isInstanceOf(NullPointerException.class);
+        .isInstanceOf(PipelineExecutionException.class)
+        .extracting("reason")
+        .isEqualTo(PipelineExecutionException.Reason.REQUIRED_RETRIEVER_FAILED);
     CandidateRetriever<String, String> nullCandidate =
         (query, context) -> Arrays.asList((SourceCandidate<String>) null);
     assertThatThrownBy(() -> pipeline(nullCandidate, 2).execute("query"))
-        .isInstanceOf(NullPointerException.class);
+        .isInstanceOf(PipelineExecutionException.class);
     CandidateRetriever<String, String> nullAfterLimit =
         (query, context) -> Arrays.asList(SourceCandidate.of("a", 1.0), null);
     assertThatThrownBy(() -> pipeline(nullAfterLimit, 1).execute("query"))
-        .isInstanceOf(NullPointerException.class);
+        .isInstanceOf(PipelineExecutionException.class);
     CandidateRetriever<String, String> failing =
         (query, context) -> {
           throw new IllegalStateException("provider unavailable");
         };
     assertThatThrownBy(() -> pipeline(failing, 2).execute("query"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("provider unavailable");
+        .isInstanceOf(PipelineExecutionException.class)
+        .hasMessageNotContaining("provider unavailable");
   }
 
   @Test
@@ -242,7 +277,7 @@ class RankingPipelineTest {
         (query, context) -> List.of(SourceCandidate.of("a", 1.0));
     var pipeline =
         RankingPipeline.<String, String>builder("discovery")
-            .addRetriever(RetrieverSpec.of("search", search, 1))
+            .addRetriever(RetrieverSpec.required("search", search, 1, Duration.ofSeconds(5)))
             .fusion(
                 (results, context) -> {
                   var candidate =
@@ -253,10 +288,13 @@ class RankingPipelineTest {
                 2)
             .ranker(new IdentityRanker<>(), 2)
             .resultLimit(2)
+            .timeout(Duration.ofSeconds(5))
+            .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
             .build();
     assertThatThrownBy(() -> pipeline.execute("query"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("duplicate");
+        .isInstanceOf(PipelineExecutionException.class)
+        .extracting("reason")
+        .isEqualTo(PipelineExecutionException.Reason.STAGE_FAILED);
   }
 
   @Test
@@ -265,27 +303,32 @@ class RankingPipelineTest {
         (query, context) -> List.of(SourceCandidate.of("a", 1.0));
     var pipeline =
         RankingPipeline.<String, String>builder("discovery")
-            .addRetriever(RetrieverSpec.of("search", search, 1))
+            .addRetriever(RetrieverSpec.required("search", search, 1, Duration.ofSeconds(5)))
             .fusion(new FirstSeenFusion<>(), 1)
             .ranker(
                 (query, candidates, context) ->
                     List.of(candidates.getFirst(), candidates.getFirst()),
                 2)
             .resultLimit(2)
+            .timeout(Duration.ofSeconds(5))
+            .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
             .build();
 
     assertThatThrownBy(() -> pipeline.execute("query"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessageContaining("duplicate");
+        .isInstanceOf(PipelineExecutionException.class)
+        .extracting("reason")
+        .isEqualTo(PipelineExecutionException.Reason.STAGE_FAILED);
   }
 
   private static RankingPipeline<String, String> pipeline(
       CandidateRetriever<String, String> retriever, int limit) {
     return RankingPipeline.<String, String>builder("discovery")
-        .addRetriever(RetrieverSpec.of("search", retriever, limit))
+        .addRetriever(RetrieverSpec.required("search", retriever, limit, Duration.ofSeconds(5)))
         .fusion(new FirstSeenFusion<>(), 10)
         .ranker(new IdentityRanker<>(), 10)
         .resultLimit(10)
+        .timeout(Duration.ofSeconds(5))
+        .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
         .build();
   }
 }

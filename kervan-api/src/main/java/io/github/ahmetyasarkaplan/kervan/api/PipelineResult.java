@@ -2,31 +2,26 @@ package io.github.ahmetyasarkaplan.kervan.api;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * Outcome of executing a ranking pipeline, with defensively copied collections.
+ * Outcome of a ranking pipeline. Provider results retain registration order and expose status and
+ * duration without raw provider exception details.
  *
- * <p>Stage names must be non-blank and cannot occur in both status sets. A result is partial
- * exactly when its failed-stage set is nonempty. A partial result may contain zero candidates.
- *
- * @param <ID> candidate identifier type.
- * @param pipelineName the name of the executed pipeline.
- * @param candidates final ranked list of candidates (unmodifiable).
- * @param isPartial true if failedStages is nonempty.
- * @param duration total wall-clock duration of the pipeline execution.
- * @param successfulStages set of stage names that completed successfully.
- * @param failedStages set of stage names that failed or timed out.
+ * @param <ID> candidate identifier type
+ * @param pipelineName the executed pipeline's name
+ * @param candidates final ordered candidates
+ * @param duration total elapsed time
+ * @param retrievalResults one result per configured provider, in registration order
  */
 public record PipelineResult<ID>(
     String pipelineName,
     List<RankedCandidate<ID>> candidates,
-    boolean isPartial,
     Duration duration,
-    Set<String> successfulStages,
-    Set<String> failedStages) {
+    List<RetrievalResult<ID>> retrievalResults) {
 
   public PipelineResult {
     Objects.requireNonNull(pipelineName, "pipelineName must not be null");
@@ -36,21 +31,60 @@ public record PipelineResult<ID>(
     candidates = List.copyOf(Objects.requireNonNull(candidates, "candidates must not be null"));
     Objects.requireNonNull(duration, "duration must not be null");
     if (duration.isNegative()) {
-      throw new IllegalArgumentException("duration must not be negative: " + duration);
+      throw new IllegalArgumentException("duration must not be negative");
     }
-    successfulStages =
-        Set.copyOf(Objects.requireNonNull(successfulStages, "successfulStages must not be null"));
-    failedStages =
-        Set.copyOf(Objects.requireNonNull(failedStages, "failedStages must not be null"));
-    if (successfulStages.stream().anyMatch(String::isBlank)
-        || failedStages.stream().anyMatch(String::isBlank)) {
-      throw new IllegalArgumentException("stage names must not be blank");
+    retrievalResults =
+        List.copyOf(Objects.requireNonNull(retrievalResults, "retrievalResults must not be null"));
+    if (retrievalResults.isEmpty()) {
+      throw new IllegalArgumentException("retrievalResults must not be empty");
     }
-    if (!Collections.disjoint(successfulStages, failedStages)) {
-      throw new IllegalArgumentException("successfulStages and failedStages must be disjoint");
+    Set<String> names = new LinkedHashSet<>();
+    boolean usable = false;
+    for (RetrievalResult<ID> result : retrievalResults) {
+      if (!names.add(result.retrieverName())) {
+        throw new IllegalArgumentException("retrievalResults must have unique retriever names");
+      }
+      if (result.status() == RetrievalStatus.CANCELLED) {
+        throw new IllegalArgumentException("a successful pipeline cannot contain cancelled work");
+      }
+      usable |= isUsable(result.status());
     }
-    if (isPartial != !failedStages.isEmpty()) {
-      throw new IllegalArgumentException("isPartial must match the presence of failed stages");
+    if (!usable) {
+      throw new IllegalArgumentException("a pipeline result requires a usable provider");
     }
+  }
+
+  /** Whether an optional provider failed or exceeded a time budget. */
+  public boolean isPartial() {
+    return retrievalResults.stream().anyMatch(result -> !isUsable(result.status()));
+  }
+
+  public Set<String> successfulStages() {
+    return stageNames(true, false);
+  }
+
+  public Set<String> failedStages() {
+    return stageNames(false, false);
+  }
+
+  public Set<String> timedOutStages() {
+    return stageNames(false, true);
+  }
+
+  private Set<String> stageNames(boolean successful, boolean timeoutsOnly) {
+    Set<String> names = new LinkedHashSet<>();
+    for (RetrievalResult<ID> result : retrievalResults) {
+      RetrievalStatus status = result.status();
+      if (timeoutsOnly
+          ? status == RetrievalStatus.TIMED_OUT || status == RetrievalStatus.DEADLINE_EXCEEDED
+          : isUsable(status) == successful) {
+        names.add(result.retrieverName());
+      }
+    }
+    return Collections.unmodifiableSet(names);
+  }
+
+  private static boolean isUsable(RetrievalStatus status) {
+    return status == RetrievalStatus.SUCCESS || status == RetrievalStatus.EMPTY;
   }
 }

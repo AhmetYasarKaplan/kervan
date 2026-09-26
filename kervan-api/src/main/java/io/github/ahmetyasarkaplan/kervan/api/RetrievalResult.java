@@ -67,4 +67,15 @@ public record RetrievalResult<ID>(
   public static <ID> RetrievalResult<ID> timedOut(String retrieverName, Duration duration) {
     return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.TIMED_OUT);
   }
+
+  /** Creates a result for a provider unfinished at the pipeline's global deadline. */
+  public static <ID> RetrievalResult<ID> deadlineExceeded(String retrieverName, Duration duration) {
+    return new RetrievalResult<>(
+        retrieverName, List.of(), duration, RetrievalStatus.DEADLINE_EXCEEDED);
+  }
+
+  /** Creates a result for work cancelled after the pipeline could no longer continue. */
+  public static <ID> RetrievalResult<ID> cancelled(String retrieverName, Duration duration) {
+    return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.CANCELLED);
+  }
 }
