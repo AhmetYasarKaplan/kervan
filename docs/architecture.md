@@ -23,6 +23,8 @@ provider query language. See the [provider-boundary decision](adr/0003-provider-
 kervan-core          -> kervan-api -> JDK
 kervan-elasticsearch -> kervan-api
                      -> Elasticsearch Java client
+kervan-qdrant       -> kervan-api
+                     -> Qdrant Java client
 kervan-spring-boot-starter -> kervan-core -> kervan-api
                            -> Spring Boot
 kervan-server      -> kervan-spring-boot-starter
@@ -38,12 +40,13 @@ kervan-testkit       -> kervan-api
 | `kervan-api` | `io.github.ahmetyasarkaplan.kervan.api` | Public component contracts and domain-independent values |
 | `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution, built-in components |
 | `kervan-elasticsearch` | `io.github.ahmetyasarkaplan.kervan.elasticsearch` | Native search request adapter and canonical hit mapping |
+| `kervan-qdrant` | `io.github.ahmetyasarkaplan.kervan.qdrant` | Native vector or hybrid query adapter and canonical point mapping |
 | `kervan-spring-boot-starter` | `io.github.ahmetyasarkaplan.kervan.spring` | Configured pipeline assembly, component lookup, and conditional health integration |
 | `kervan-server` | `io.github.ahmetyasarkaplan.kervan.server` | HTTP access to explicitly bound configured pipelines |
 | `kervan-observability` | `io.github.ahmetyasarkaplan.kervan.observability` | Optional metrics, tracing, and structured execution logging |
 | `kervan-testkit` | `io.github.ahmetyasarkaplan.kervan.testkit` | Test fixtures, retriever contracts, and pipeline assertions |
 
-API does not depend on core. Neither API nor core depends on Spring, Elasticsearch,
+API does not depend on core. Neither API nor core depends on Spring, Elasticsearch, Qdrant,
 HTTP frameworks, or infrastructure-specific serialization annotations. Core
 exposes API through Gradle's `api` configuration because public core components
 use API types in their signatures. The `verifyModuleBoundaries` task validates
@@ -54,6 +57,12 @@ from application code, applies the candidate limit and server-side timeout,
 then maps ordered hits to canonical IDs. Its client dependency stays outside
 API and core. One native Elasticsearch hybrid response is one Kervan provider
 list; Kervan's fusion combines that list with other independent providers.
+
+The Qdrant adapter accepts a native `QueryPoints.Builder`, including Qdrant filters
+and hybrid prefetches. It applies the candidate limit and remaining time budget,
+then maps ordered points to canonical IDs. The application declares whether the
+native score is a similarity or a distance; distance is negated before score-based
+fusion. One native Qdrant query is one Kervan provider list.
 
 The Spring Boot starter binds `kervan.pipelines` settings and resolves named
 application beans to build pipelines at context startup. It owns their lifecycle
@@ -86,7 +95,7 @@ applications should keep it on their test classpath. See the
 ## Candidate model
 
 `CandidateRetriever<Q, ID>` returns an ordered `List<SourceCandidate<ID>>` for one
-provider. Each source candidate has a canonical ID, a finite score, and small
+provider. Each source candidate has a canonical ID, a finite higher-is-better score, and small
 optional attributes. The retriever does not set its name, measured duration, or
 execution status. Its `RetrievalContext` carries a positive requested candidate
 limit and the smaller remaining per-provider and global time budgets.
@@ -105,7 +114,8 @@ The core separately classifies per-provider `TIMED_OUT`, global
 
 `RankedCandidate` represents the result after cross-provider fusion. It contains
 the canonical ID, current score, and ordered `SourceContribution` values holding
-each provider's original rank and score. The final rank is the candidate's
+each provider's rank and Kervan-facing score. An adapter may orient a native
+distance into a higher-is-better score. The final rank is the candidate's
 one-based position in the result list. Candidate and result collections are
 unmodifiable snapshots; IDs and attribute values are not deep copied, so callers
 should use immutable values.
@@ -143,11 +153,13 @@ This baseline does not calculate a relevance-fusion score.
 
 `ReciprocalRankFusion` sums `1 / (k + source rank)` for each contribution, where
 `k` is a positive rank constant. It uses source order rather than raw scores, so
-providers may use unrelated scoring scales. `WeightedMinMaxFusion` normalizes
-scores separately within each provider's returned, deduplicated window, then
+providers may use unrelated scoring scales. `WeightedReciprocalRankFusion` sums
+`source weight / (k + source rank)` and also ignores raw score scales.
+`WeightedMinMaxFusion` normalizes higher-is-better scores separately within each
+provider's returned, deduplicated window, then
 sums weighted values. A source with equal scores assigns 1.0 to every returned
 candidate. Weights are positive finite values on `RetrieverSpec`; the default is
-1.0. Reciprocal rank fusion ignores weights. Both strategies sort by fused score,
+1.0. Unweighted reciprocal rank fusion ignores weights. All score-based strategies sort by fused score,
 then best source rank, then ranks in provider registration order, then first
 appearance. They cap their output at the configured fusion limit while retaining
 original source contributions. The provider candidate limit is applied before

@@ -14,7 +14,7 @@ import java.util.Objects;
  * @param candidateLimit positive maximum number of unique source candidates
  * @param timeout positive per-provider timeout
  * @param required whether failure of this provider fails the pipeline
- * @param weight positive finite score-fusion weight
+ * @param weight positive finite weight for weight-aware fusion
  */
 public record RetrieverSpec<Q, ID>(
     String name,

@@ -40,6 +40,7 @@ val libraryModules =
     "kervan-api",
     "kervan-core",
     "kervan-elasticsearch",
+    "kervan-qdrant",
     "kervan-spring-boot-starter",
     "kervan-server",
     "kervan-observability",
@@ -203,12 +204,16 @@ subprojects {
                   id is ProjectComponentIdentifier && id.buildTreePath == ":kervan-api"
                 ":kervan-elasticsearch" ->
                   id !is ProjectComponentIdentifier || id.buildTreePath == ":kervan-api"
+                ":kervan-qdrant" ->
+                  id !is ProjectComponentIdentifier || id.buildTreePath == ":kervan-api"
                 ":kervan-spring-boot-starter" ->
                   when (id) {
                     is ProjectComponentIdentifier ->
                       id.buildTreePath == ":kervan-api" || id.buildTreePath == ":kervan-core"
                     is ModuleComponentIdentifier ->
-                      id.group != "co.elastic.clients" && !id.group.startsWith("org.elasticsearch")
+                      id.group != "co.elastic.clients" &&
+                        !id.group.startsWith("org.elasticsearch") &&
+                        id.group != "io.qdrant"
                     else -> false
                   }
                 ":kervan-server" ->
@@ -217,7 +222,9 @@ subprojects {
                       id.buildTreePath in
                         setOf(":kervan-api", ":kervan-core", ":kervan-spring-boot-starter")
                     is ModuleComponentIdentifier ->
-                      id.group != "co.elastic.clients" && !id.group.startsWith("org.elasticsearch")
+                      id.group != "co.elastic.clients" &&
+                        !id.group.startsWith("org.elasticsearch") &&
+                        id.group != "io.qdrant"
                     else -> false
                   }
                 ":kervan-observability" ->

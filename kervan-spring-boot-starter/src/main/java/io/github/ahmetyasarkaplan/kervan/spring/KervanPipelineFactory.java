@@ -12,6 +12,7 @@ import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
 import io.github.ahmetyasarkaplan.kervan.core.ReciprocalRankFusion;
 import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
 import io.github.ahmetyasarkaplan.kervan.core.WeightedMinMaxFusion;
+import io.github.ahmetyasarkaplan.kervan.core.WeightedReciprocalRankFusion;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
@@ -152,16 +153,24 @@ final class KervanPipelineFactory {
                 : positive(settings.rankConstant(), path + ".rank-constant");
         fusion = new ReciprocalRankFusion<>(constant);
       }
+      case "weighted-rrf" -> {
+        absent(settings.bean(), path + ".bean");
+        int constant =
+            settings.rankConstant() == null
+                ? 60
+                : positive(settings.rankConstant(), path + ".rank-constant");
+        fusion = new WeightedReciprocalRankFusion<>(constant);
+      }
       case "weighted-min-max" -> {
         absent(settings.bean(), path + ".bean");
         if (settings.rankConstant() != null) {
-          throw invalid(path + ".rank-constant", "only rrf accepts rank-constant");
+          throw invalid(path + ".rank-constant", "only rrf and weighted-rrf accept rank-constant");
         }
         fusion = new WeightedMinMaxFusion<>();
       }
       case "custom" -> {
         if (settings.rankConstant() != null) {
-          throw invalid(path + ".rank-constant", "only rrf accepts rank-constant");
+          throw invalid(path + ".rank-constant", "only rrf and weighted-rrf accept rank-constant");
         }
         String beanName = nonBlank(settings.bean(), path + ".bean");
         fusion = component(beanName, FusionStrategy.class, path + ".bean");

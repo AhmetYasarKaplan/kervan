@@ -68,9 +68,10 @@ kervan:
 
 The retriever name identifies a source in Kervan results; `bean` identifies the
 Spring bean that implements it. The configured order determines stable source
-ordering. An optional positive `weight` on a retriever is used only with
-`fusion.type: weighted-min-max`; omitted weights are 1.0. Fusion may be `rrf`,
-`weighted-min-max`, or `custom`. Custom fusion requires a `bean` naming a
+ordering. An optional positive `weight` on a retriever is used with
+`fusion.type: weighted-rrf` or `weighted-min-max`; omitted weights are 1.0.
+Fusion may be `rrf`, `weighted-rrf`, `weighted-min-max`, or `custom`.
+`weighted-rrf` and `rrf` accept `rank-constant`. Custom fusion requires a `bean` naming a
 `FusionStrategy<ID>` bean. The ranker may be `identity` or `custom`, where a
 custom ranker names a `Ranker<Q, ID>` bean. Without a fusion section, the core
 uses RRF with rank constant 60. Without a ranker section, the starter uses an

@@ -455,6 +455,9 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     if (fusion instanceof ReciprocalRankFusion<?>) {
       return "rrf";
     }
+    if (fusion instanceof WeightedReciprocalRankFusion<?>) {
+      return "weighted-rrf";
+    }
     if (fusion instanceof WeightedMinMaxFusion<?>) {
       return "weighted-min-max";
     }

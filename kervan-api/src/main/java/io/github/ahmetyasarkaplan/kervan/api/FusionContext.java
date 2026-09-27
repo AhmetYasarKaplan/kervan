@@ -8,7 +8,7 @@ import java.util.Objects;
  *
  * @param candidateLimit the maximum number of candidates to produce after fusion
  * @param sourceWeights positive finite weights keyed by stable retriever name; an absent weight is
- *     interpreted as 1.0 by score-based fusion
+ *     interpreted as 1.0 by weight-aware fusion
  */
 public record FusionContext(int candidateLimit, Map<String, Double> sourceWeights) {
 

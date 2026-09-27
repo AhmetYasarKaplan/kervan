@@ -76,7 +76,7 @@ public record KervanProperties(Map<String, Pipeline> pipelines) {
    * @param candidateLimit maximum unique source candidates
    * @param timeout provider timeout
    * @param required whether provider failure fails the pipeline
-   * @param weight score-fusion weight
+   * @param weight positive weight for weight-aware fusion
    */
   public record Retriever(
       String name,

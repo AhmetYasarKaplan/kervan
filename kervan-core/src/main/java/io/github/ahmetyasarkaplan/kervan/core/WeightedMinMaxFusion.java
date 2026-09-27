@@ -14,8 +14,8 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Weights scores normalized to [0, 1] within each provider's retrieved window. A source whose
- * scores are all equal gives every returned candidate a normalized score of 1.0.
+ * Weights higher-is-better scores normalized to [0, 1] within each provider's retrieved window. A
+ * source whose scores are all equal gives every returned candidate a normalized score of 1.0.
  *
  * @param <ID> canonical candidate identifier type
  */

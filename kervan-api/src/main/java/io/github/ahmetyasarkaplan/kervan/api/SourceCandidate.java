@@ -8,7 +8,8 @@ import java.util.Objects;
  *
  * @param <ID> canonical candidate identifier type
  * @param id canonical candidate identifier
- * @param score finite provider score
+ * @param score finite, higher-is-better score for score-based fusion; convert distance values with
+ *     {@link ScoreDirection#orient(double)} before constructing a candidate
  * @param attributes immutable map of application-supplied hints; values are not deep copied
  */
 public record SourceCandidate<ID>(ID id, double score, Map<String, Object> attributes) {

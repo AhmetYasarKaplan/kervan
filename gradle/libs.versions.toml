@@ -6,6 +6,7 @@ google-java-format = "1.36.1"
 ktfmt = "0.64"
 jacoco = "0.8.15"
 elasticsearch = "9.5.0"
+qdrant = "1.19.0"
 testcontainers = "2.0.5"
 spring-boot = "4.1.1"
 micrometer = "1.17.1"
@@ -20,7 +21,9 @@ junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.re
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 elasticsearch-java = { module = "co.elastic.clients:elasticsearch-java", version.ref = "elasticsearch" }
+qdrant-java = { module = "io.qdrant:client", version.ref = "qdrant" }
 testcontainers-elasticsearch = { module = "org.testcontainers:testcontainers-elasticsearch", version.ref = "testcontainers" }
+testcontainers-qdrant = { module = "org.testcontainers:testcontainers-qdrant", version.ref = "testcontainers" }
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
 spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
 spring-boot-starter-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc" }

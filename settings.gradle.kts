@@ -13,6 +13,7 @@ include(
   "kervan-api",
   "kervan-core",
   "kervan-elasticsearch",
+  "kervan-qdrant",
   "kervan-spring-boot-starter",
   "kervan-server",
   "kervan-observability",

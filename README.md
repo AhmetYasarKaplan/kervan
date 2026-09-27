@@ -7,7 +7,7 @@ operated providers. An application can combine search, recommendation, popularit
 or custom provider results into one ranked list with canonical IDs and inspectable
 source contributions. Its synchronous pipeline includes concurrent provider
 calls, time budgets, failure policies, rank and score fusion, candidate limits,
-and source provenance. Optional modules provide an Elasticsearch adapter,
+and source provenance. Optional modules provide Elasticsearch and Qdrant adapters,
 Spring Boot configuration, execution instrumentation, and reusable test fixtures.
 
 ## Intended request flow
@@ -69,10 +69,11 @@ try (RankingPipeline<String, String> pipeline =
 It is also the pipeline default with a rank constant of 60 when `.fusion(...)`
 is omitted. An explicit fusion configuration sets both the strategy and its
 output limit.
-`WeightedMinMaxFusion` instead normalizes each source's returned scores and adds
-them using optional positive weights on `RetrieverSpec`. `FirstSeenFusion` remains
-available when provider registration order should determine the result. All three
-strategies retain each provider's original rank and score for inspection.
+`WeightedReciprocalRankFusion` applies optional positive source weights to rank
+contributions. `WeightedMinMaxFusion` instead normalizes each source's returned
+higher-is-better scores and adds them using those weights. `FirstSeenFusion` remains
+available when provider registration order should determine the result. All four
+strategies retain each provider's rank and Kervan-facing score for inspection.
 Retriever implementations are supplied by the application. The example uses
 in-memory lambdas; it does not contact an external provider.
 
@@ -83,6 +84,7 @@ in-memory lambdas; it does not contact an external provider.
 | `kervan-api` | Public contracts and domain-independent value types |
 | `kervan-core` | Concurrent pipeline, time budgets, failure handling, built-in fusion strategies, and identity ranker |
 | `kervan-elasticsearch` | Official-client adapter that maps one Elasticsearch search response into a provider list |
+| `kervan-qdrant` | Official-client adapter for Qdrant vector or native hybrid query results |
 | `kervan-spring-boot-starter` | Auto-configuration that assembles named pipelines from properties and application beans |
 | `kervan-server` | Optional HTTP adapter for explicitly bound Spring Boot pipelines |
 | `kervan-observability` | Optional Micrometer metrics, OpenTelemetry spans, and structured execution logs |
@@ -90,11 +92,11 @@ in-memory lambdas; it does not contact an external provider.
 | `examples/product-discovery` | Runnable Spring Boot example with Elasticsearch, an HTTP recommendation provider, and in-memory popularity |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
-`kervan-elasticsearch` depends on `kervan-api` and the pinned official Java
-client. API and core have no external production dependencies. The Maven group
-and Java package prefix are `io.github.ahmetyasarkaplan.kervan`.
-The Spring Boot starter depends on core and Spring Boot, while the Elasticsearch
-adapter remains an independent optional module.
+`kervan-elasticsearch` and `kervan-qdrant` depend on `kervan-api` and their
+respective pinned official Java clients. API and core have no external production
+dependencies. The Maven group and Java package prefix are
+`io.github.ahmetyasarkaplan.kervan`. The Spring Boot starter depends on core and
+Spring Boot, while provider adapters remain independent optional modules.
 The observability module depends on core and its telemetry APIs; testkit depends
 on API and JUnit Jupiter. Neither adds an infrastructure dependency to API or
 core.
@@ -185,6 +187,8 @@ Test and coverage reports are generated under each module:
 
 See the [Elasticsearch adapter guide](docs/elasticsearch.md) for a native hybrid
 request combined with an independent provider.
+See the [Qdrant adapter guide](docs/qdrant.md) for vector and native hybrid queries,
+canonical ID mapping, and score direction.
 See the [Spring Boot guide](docs/spring-boot.md) for YAML configuration, custom
 beans, validation, and lifecycle.
 See the [HTTP server guide](docs/server.md) to expose selected pipelines through

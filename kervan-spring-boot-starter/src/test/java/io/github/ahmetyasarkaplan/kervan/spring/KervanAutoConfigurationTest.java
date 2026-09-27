@@ -73,6 +73,29 @@ class KervanAutoConfigurationTest {
   }
 
   @Test
+  void configuresWeightedRrfFromRetrieverWeights() {
+    configuredRunner(
+            "kervan.pipelines.sample.retrievers[0].weight=1",
+            "kervan.pipelines.sample.retrievers[1].weight=3",
+            "kervan.pipelines.sample.fusion.type=weighted-rrf",
+            "kervan.pipelines.sample.fusion.rank-constant=2")
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              var result =
+                  context
+                      .getBean(KervanPipelineRegistry.class)
+                      .pipeline("sample", String.class, String.class)
+                      .execute("camera");
+              assertThat(result.candidates())
+                  .extracting(RankedCandidate::id)
+                  .containsExactly("shared", "recommendation-only", "search-only");
+              assertThat(result.candidates().getFirst().score()).isEqualTo(1.0 / 3 + 3.0 / 4);
+              assertThat(result.candidates().get(1).score()).isEqualTo(3.0 / 3);
+            });
+  }
+
+  @Test
   void attachesApplicationObserverBeanToConfiguredPipeline() {
     yamlRunner
         .withUserConfiguration(ObserverComponents.class)
