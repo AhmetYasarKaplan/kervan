@@ -3,8 +3,8 @@ plugins { `java-library` }
 dependencies {
   api(project(":kervan-core"))
   implementation(platform(libs.spring.boot.bom))
-  implementation(libs.spring.boot.starter)
-  implementation(libs.spring.boot.autoconfigure)
+  api(libs.spring.boot.starter)
+  api(libs.spring.boot.autoconfigure)
   compileOnly(libs.spring.boot.health)
   compileOnly(libs.jackson.annotations)
   annotationProcessor(libs.spring.boot.configuration.processor)

@@ -586,6 +586,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
       List<SourceCandidate<ID>> raw, int candidateLimit) {
     Objects.requireNonNull(raw, "retriever must not return null");
     var unique = new LinkedHashMap<ID, SourceHit<ID>>();
+    // Validate every returned candidate, including those beyond the output limit.
     for (int index = 0; index < raw.size(); index++) {
       SourceCandidate<ID> candidate =
           Objects.requireNonNull(raw.get(index), "retriever must not return null candidates");

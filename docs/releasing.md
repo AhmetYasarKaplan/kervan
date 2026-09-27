@@ -12,6 +12,10 @@ include the license text. When `KERVAN_SIGNING_KEY` and
 `KERVAN_SIGNING_PASSWORD` are set, Gradle signs the publications with an
 in-memory PGP key. These values must stay outside the repository.
 
+Run `./gradlew verifyPublicationArtifacts` to check the generated JARs, license
+files, POM coordinates, required metadata, and dependency versions locally.
+This check does not need signing credentials or publish anything.
+
 ## Prepare a Central Portal bundle
 
 1. Verify the `io.github.ahmetyasarkaplan.kervan` namespace in the Maven Central
@@ -23,19 +27,22 @@ in-memory PGP key. These values must stay outside the repository.
    `KERVAN_SIGNING_PASSWORD` to its passphrase in the release environment.
 4. Run `./gradlew clean check`. This includes warning-free Javadoc generation and
    the Elasticsearch Testcontainers tests, which need Docker. Then run
-   `./gradlew publishAllPublicationsToCentralStagingRepository`.
-5. Inspect `build/central-staging/io/github/ahmetyasarkaplan/kervan/`. Every
-   library version directory should contain its main, sources, and Javadoc
-   JARs, POM, and corresponding `.asc` signatures. Review the POM dependencies
-   and metadata. Archive the contents of `build/central-staging` with the `io`
-   directory at the root of one ZIP file.
-6. Upload that ZIP in the [Central Portal](https://central.sonatype.com/).
+   `./gradlew centralBundle`. This clears the previous local staging directory,
+   publishes all six modules to it, verifies the staged files, and creates
+   `build/distributions/kervan-<version>-central.zip`.
+5. Inspect the ZIP before uploading it. Its root must be the `io` directory,
+   with a Maven version directory for each of the six library modules. Each
+   directory contains the main, sources, and Javadoc JARs and POM, with a `.asc`
+   signature and `.md5` and `.sha1` checksums for each artifact. The Gradle task
+   checks that the required files are present and the checksums match. Review
+   the POM dependencies and metadata as part of the release review.
+6. Upload the ZIP in the [Central Portal](https://central.sonatype.com/).
    Keep publication user-managed, inspect validation results, then release it
    after review. Do not automate publication from a normal `check` run.
 
 The [Central requirements](https://central.sonatype.org/publish/requirements/)
-specify POM metadata, sources, Javadoc, and signatures. The
-[bundle upload guide](https://central.sonatype.org/publish/publish-portal-upload/)
+specify POM metadata, sources, Javadoc, signatures, and `.md5` and `.sha1`
+checksums. The [bundle upload guide](https://central.sonatype.org/publish/publish-portal-upload/)
 describes the Maven repository layout for the ZIP. The Portal may require
 additional account setup; this repository does not hold publishing credentials.
 
