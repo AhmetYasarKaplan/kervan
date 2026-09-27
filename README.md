@@ -24,6 +24,9 @@ Request
 
 The embedded Java library is the primary design target.
 
+Project status: v1.0 preparation. The APIs and example are available from this
+checkout; the release workflow is documented but has not been run here.
+
 Kervan operates across provider boundaries. A search engine can perform its own
 lexical, vector, and hybrid retrieval inside one provider request; the application
 can then combine that result with independently operated providers. Search indexing,
@@ -86,6 +89,7 @@ in-memory lambdas; it does not contact an external provider.
 | `kervan-spring-boot-starter` | Auto-configuration that assembles named pipelines from properties and application beans |
 | `kervan-observability` | Optional Micrometer metrics, OpenTelemetry spans, and structured execution logs |
 | `kervan-testkit` | Test-only retriever fixtures, contract tests, and pipeline assertions |
+| `examples/product-discovery` | Runnable Spring Boot example with Elasticsearch, an HTTP recommendation provider, and in-memory popularity |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
 `kervan-elasticsearch` depends on `kervan-api` and the pinned official Java
@@ -96,6 +100,49 @@ adapter remains an independent optional module.
 The observability module depends on core and its telemetry APIs; testkit depends
 on API and JUnit Jupiter. Neither adds an infrastructure dependency to API or
 core.
+
+## Run the product discovery example
+
+With JDK 21 and Docker running, start Elasticsearch and the separate demo
+recommendation process, then run the Spring Boot application in another terminal:
+
+```sh
+docker compose -f examples/product-discovery/compose.yaml up --wait -d
+./gradlew :examples:product-discovery:runRecommendations
+```
+
+```sh
+./gradlew :examples:product-discovery:run
+```
+
+On Windows, replace `./gradlew` with `.\gradlew.bat`. The application seeds a
+three-product catalog, executes one native Elasticsearch `query` + `knn` request,
+and prints the fused IDs, contributing sources, and provider statuses. See the
+[getting-started guide](docs/getting-started.md) for setup details and the
+equivalent Spring Boot configuration.
+
+The example's Spring configuration names application retriever beans and keeps
+their time and candidate limits visible:
+
+```yaml
+kervan:
+  pipelines:
+    discovery:
+      timeout: 3s
+      result-size: 5
+      failure-policy: partial-results
+      retrievers:
+        - name: search
+          bean: searchRetriever
+          candidate-limit: 5
+          timeout: 2s
+          required: true
+        - name: recommendations
+          bean: recommendationRetriever
+          candidate-limit: 3
+          timeout: 700ms
+          required: false
+```
 
 ## Build locally
 
@@ -145,6 +192,11 @@ beans, validation, and lifecycle.
 See the [observability guide](docs/observability.md) to attach metrics, tracing,
 and structured logs, and the [testkit guide](docs/testkit.md) for deterministic
 retriever contract tests and pipeline fixtures.
+See the [extension guide](docs/extension-guide.md) for implementing custom
+retrievers, fusion strategies, and rankers.
+See the [release guide](docs/releasing.md) for versioning and publication setup.
+See the [public API review](docs/api-review.md) for v1.0 contract decisions and
+remaining release checks.
 
 ## Design documentation
 

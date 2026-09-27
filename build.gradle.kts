@@ -1,7 +1,13 @@
 import org.gradle.api.artifacts.component.ComponentIdentifier
 import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.api.publish.maven.MavenPublication
+import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.tasks.testing.Test
+import org.gradle.jvm.tasks.Jar
+import org.gradle.plugins.signing.SigningExtension
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
@@ -23,6 +29,80 @@ val jacocoVersion = libs.versions.jacoco.get()
 
 subprojects {
   plugins.withId("java-library") {
+    pluginManager.apply("maven-publish")
+    pluginManager.apply("signing")
+
+    extensions.configure<JavaPluginExtension> {
+      withSourcesJar()
+      withJavadocJar()
+    }
+
+    tasks.withType<Jar>().configureEach {
+      from(rootProject.file("LICENSE")) { into("META-INF") }
+    }
+    tasks.withType<GenerateModuleMetadata>().configureEach { enabled = false }
+
+    extensions.configure<PublishingExtension> {
+      publications.create<MavenPublication>("mavenJava") {
+        from(components["java"])
+        pom {
+          name.set("Kervan ${project.name}")
+          description.set("${project.name} module of the Kervan retrieval orchestration library")
+          url.set("https://github.com/AhmetYasarKaplan/kervan")
+          licenses {
+            license {
+              name.set("The Apache Software License, Version 2.0")
+              url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+              distribution.set("repo")
+            }
+          }
+          developers {
+            developer {
+              id.set("AhmetYasarKaplan")
+              name.set("Ahmet Yasar Kaplan")
+              url.set("https://github.com/AhmetYasarKaplan")
+            }
+          }
+          scm {
+            connection.set("scm:git:https://github.com/AhmetYasarKaplan/kervan.git")
+            developerConnection.set("scm:git:ssh://git@github.com/AhmetYasarKaplan/kervan.git")
+            url.set("https://github.com/AhmetYasarKaplan/kervan")
+          }
+        }
+      }
+      repositories {
+        maven {
+          name = "centralStaging"
+          url = uri(rootProject.layout.buildDirectory.dir("central-staging").get().asFile)
+        }
+      }
+    }
+
+    val signingKey = providers.environmentVariable("KERVAN_SIGNING_KEY").orNull
+    val publicationVersion = project.version.toString()
+    if (signingKey != null) {
+      extensions.configure<SigningExtension> {
+        useInMemoryPgpKeys(
+          signingKey,
+          providers.environmentVariable("KERVAN_SIGNING_PASSWORD").orNull,
+        )
+        sign(extensions.getByType<PublishingExtension>().publications["mavenJava"])
+      }
+    }
+    tasks.withType<PublishToMavenRepository>().configureEach {
+      doFirst {
+        if (!publicationVersion.endsWith("-SNAPSHOT")) {
+          check(
+            signingKey != null && providers.environmentVariable("KERVAN_SIGNING_PASSWORD").isPresent
+          ) {
+            "A Maven Central release requires KERVAN_SIGNING_KEY and KERVAN_SIGNING_PASSWORD"
+          }
+        }
+      }
+    }
+  }
+
+  plugins.withId("java") {
     pluginManager.apply("jacoco")
 
     extensions.configure<JavaPluginExtension> {
@@ -115,7 +195,7 @@ subprojects {
                         )
                     else -> false
                   }
-                else -> false
+                else -> modulePath == ":examples:product-discovery"
               }
 
             val forbidden =
@@ -140,11 +220,16 @@ subprojects {
 
 spotless {
   java {
-    target("kervan-*/src/**/*.java")
+    target("kervan-*/src/**/*.java", "examples/*/src/**/*.java")
     googleJavaFormat(libs.versions.google.java.format.get())
   }
   kotlinGradle {
-    target("*.gradle.kts", "kervan-*/build.gradle.kts")
+    target(
+      "*.gradle.kts",
+      "kervan-*/build.gradle.kts",
+      "examples/build.gradle.kts",
+      "examples/*/build.gradle.kts",
+    )
     ktfmt(libs.versions.ktfmt.get()).googleStyle()
   }
   format("misc") {

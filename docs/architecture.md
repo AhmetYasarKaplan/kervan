@@ -59,6 +59,14 @@ types are present.
 It does not add Spring dependencies to API or core or create a search provider
 from YAML. See the [Spring Boot guide](spring-boot.md).
 
+The runnable [product discovery example](../examples/product-discovery) joins an
+Elasticsearch native hybrid request, an independent HTTP recommendation service,
+and an in-memory popularity provider. It demonstrates the extension path: an
+application implements `CandidateRetriever`, maps native IDs to canonical IDs,
+and registers the bean without adding a provider protocol to core. The
+[extension guide](extension-guide.md) documents custom retrievers, fusion, and
+rankers.
+
 Core exposes a small `PipelineObserver` hook for pipeline and stage outcomes.
 The optional observability module implements it using Micrometer, OpenTelemetry,
 and SLF4J. Observer callbacks receive configured names, coarse statuses,

@@ -16,4 +16,5 @@ include(
   "kervan-spring-boot-starter",
   "kervan-observability",
   "kervan-testkit",
+  "examples:product-discovery",
 )

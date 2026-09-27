@@ -1,0 +1,26 @@
+kervan:
+  pipelines:
+    discovery:
+      timeout: 3s
+      result-size: 5
+      failure-policy: partial-results
+      retrievers:
+        - name: search
+          bean: searchRetriever
+          candidate-limit: 5
+          timeout: 2s
+          required: true
+        - name: recommendations
+          bean: recommendationRetriever
+          candidate-limit: 3
+          timeout: 700ms
+          required: false
+        - name: popularity
+          bean: popularityRetriever
+          candidate-limit: 3
+          timeout: 100ms
+          required: false
+      fusion:
+        type: rrf
+        rank-constant: 60
+        candidate-limit: 8
