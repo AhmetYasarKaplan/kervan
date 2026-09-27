@@ -24,9 +24,6 @@ Request
 
 The embedded Java library is the primary design target.
 
-Project status: v1.0 preparation. The APIs and example are available from this
-checkout; the release workflow is documented but has not been run here.
-
 Kervan operates across provider boundaries. A search engine can perform its own
 lexical, vector, and hybrid retrieval inside one provider request; the application
 can then combine that result with independently operated providers. Search indexing,
@@ -195,8 +192,8 @@ retriever contract tests and pipeline fixtures.
 See the [extension guide](docs/extension-guide.md) for implementing custom
 retrievers, fusion strategies, and rankers.
 See the [release guide](docs/releasing.md) for versioning and publication setup.
-See the [public API review](docs/api-review.md) for v1.0 contract decisions and
-remaining release checks.
+See the [public API review](docs/api-review.md) for contract details and usage
+notes.
 
 ## Design documentation
 

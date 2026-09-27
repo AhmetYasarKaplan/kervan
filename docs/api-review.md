@@ -1,4 +1,4 @@
-# Public API review for v1.0 preparation
+# Public API review
 
 This review covers the public contracts in `kervan-api`, the pipeline builder and
 built-in strategies in `kervan-core`, and the entry points of the optional
@@ -15,7 +15,7 @@ points without package-private access or changes to the framework.
 | Spring Boot registry | Resolves configured pipelines by name and concrete query/ID type tokens; context owns lifecycle |
 
 The review did not find a need to rename public types or add a general provider
-query language for v1.0. The example exercises the embedded Spring Boot path and
+query language. The example exercises the embedded Spring Boot path and
 native Elasticsearch hybrid request with an independent HTTP provider.
 
 Two usage details need to stay visible in the documentation:
@@ -26,8 +26,3 @@ Two usage details need to stay visible in the documentation:
   `IllegalStateException`; closing during an active call is reported through
   `PipelineExecutionException` with reason `CLOSED`. Remote work may continue
   after Kervan stops waiting if a provider ignores interruption.
-
-The source version remains a snapshot. Before tagging v1.0, finish the missing
-Javadoc comments reported by the `javadoc` tasks, repeat `clean check`, and
-inspect a signed Central staging bundle with the release key. See the
-[release guide](releasing.md).

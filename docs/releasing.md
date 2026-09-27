@@ -1,10 +1,10 @@
-# Versioning and release preparation
+# Versioning and releases
 
-Kervan's six library modules share the version in `gradle.properties` and publish
-under `io.github.ahmetyasarkaplan.kervan`. The runnable example is not a library
-publication. Keep `-SNAPSHOT` while developing; use a new immutable version for
-each public release. For v1.0, incompatible public API changes require a new
-major version, compatible features a minor version, and fixes a patch version.
+Kervan's six library modules share the version in `gradle.properties` and use the
+Maven group `io.github.ahmetyasarkaplan.kervan`. The runnable example is not a
+library publication. Use a new immutable version for each public release.
+Incompatible public API changes require a new major version, compatible features
+a minor version, and fixes a patch version.
 
 The Gradle `maven-publish` setup creates main, sources, and Javadoc JARs for each
 library, with Apache-2.0, developer, and SCM metadata in the POM. Library JARs
@@ -17,8 +17,8 @@ in-memory PGP key. These values must stay outside the repository.
 1. Verify the `io.github.ahmetyasarkaplan.kervan` namespace in the Maven Central
    Portal, and confirm the account can publish it.
 2. Review the public API, changelog/release notes, example, documentation, and
-   dependency versions. Set `version=1.0.0` (or the intended release version) in
-   `gradle.properties`. Never reuse a previously published version.
+   dependency versions. Set the intended release version in `gradle.properties`.
+   Never reuse a previously published version.
 3. Set `KERVAN_SIGNING_KEY` to the ASCII-armored private PGP key and
    `KERVAN_SIGNING_PASSWORD` to its passphrase in the release environment.
 4. Run `./gradlew clean check`. This includes the Elasticsearch Testcontainers
@@ -40,5 +40,5 @@ describes the Maven repository layout for the ZIP. The Portal may require
 additional account setup; this repository does not hold publishing credentials.
 
 For a local consumer test without a Portal upload, run
-`./gradlew publishToMavenLocal` while the project has a snapshot version, then
+`./gradlew publishToMavenLocal`, then
 resolve the desired module from `mavenLocal()` in a separate application.

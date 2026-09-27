@@ -1,8 +1,7 @@
 # Getting started
 
 Kervan runs inside a Java 21 application. Start with two independent candidate
-providers and a single pipeline. The steps below build modules from source;
-Maven Central publication is prepared separately.
+providers and a single pipeline. The steps below build modules from source.
 
 ## Build from this repository
 
