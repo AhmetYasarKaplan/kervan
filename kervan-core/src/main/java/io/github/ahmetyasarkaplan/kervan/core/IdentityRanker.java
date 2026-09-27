@@ -17,6 +17,9 @@ import java.util.Objects;
  */
 public final class IdentityRanker<Q, ID> implements Ranker<Q, ID> {
 
+  /** Creates a ranker that preserves fusion order. */
+  public IdentityRanker() {}
+
   @Override
   public List<RankedCandidate<ID>> rank(
       Q query, List<RankedCandidate<ID>> candidates, RankingContext context) {

@@ -12,6 +12,15 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication
 public class ProductDiscoveryApplication {
 
+  /** Creates the demo application entry point. */
+  public ProductDiscoveryApplication() {}
+
+  /**
+   * Starts Spring Boot, seeds the local catalog, and runs one pipeline request.
+   *
+   * @param args Spring Boot command-line arguments
+   * @throws IOException if catalog setup cannot communicate with Elasticsearch
+   */
   public static void main(String[] args) throws IOException {
     try (var application = SpringApplication.run(ProductDiscoveryApplication.class, args)) {
       DemoCatalog.seed(application.getBean(ElasticsearchClient.class));

@@ -12,6 +12,7 @@ import java.util.Objects;
  */
 public record FusionContext(int candidateLimit, Map<String, Double> sourceWeights) {
 
+  /** Validates the output limit and takes an immutable snapshot of source weights. */
   public FusionContext {
     if (candidateLimit <= 0) {
       throw new IllegalArgumentException("candidateLimit must be positive: " + candidateLimit);
@@ -29,14 +30,32 @@ public record FusionContext(int candidateLimit, Map<String, Double> sourceWeight
         });
   }
 
+  /**
+   * Creates a context without explicit source weights.
+   *
+   * @param candidateLimit positive maximum number of fused candidates
+   */
   public FusionContext(int candidateLimit) {
     this(candidateLimit, Map.of());
   }
 
+  /**
+   * Creates a context without explicit source weights.
+   *
+   * @param candidateLimit positive maximum number of fused candidates
+   * @return the fusion context
+   */
   public static FusionContext of(int candidateLimit) {
     return new FusionContext(candidateLimit);
   }
 
+  /**
+   * Creates a context with positive finite weights keyed by provider name.
+   *
+   * @param candidateLimit positive maximum number of fused candidates
+   * @param sourceWeights provider weights, copied into an immutable map
+   * @return the fusion context
+   */
   public static FusionContext of(int candidateLimit, Map<String, Double> sourceWeights) {
     return new FusionContext(candidateLimit, sourceWeights);
   }

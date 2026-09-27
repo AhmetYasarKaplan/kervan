@@ -16,8 +16,13 @@ import java.util.Set;
 /**
  * Weights scores normalized to [0, 1] within each provider's retrieved window. A source whose
  * scores are all equal gives every returned candidate a normalized score of 1.0.
+ *
+ * @param <ID> canonical candidate identifier type
  */
 public final class WeightedMinMaxFusion<ID> implements FusionStrategy<ID> {
+
+  /** Creates a strategy that normalizes each provider's retrieved score window. */
+  public WeightedMinMaxFusion() {}
 
   @Override
   public List<RankedCandidate<ID>> fuse(List<RetrievalResult<ID>> results, FusionContext context) {

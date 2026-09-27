@@ -5,10 +5,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** A post-fusion candidate with an ordered contribution from each source that found it. */
+/**
+ * A post-fusion candidate with an ordered contribution from each source that found it.
+ *
+ * @param <ID> canonical candidate identifier type
+ * @param id canonical candidate identifier
+ * @param score finite fused score
+ * @param contributions nonempty source contributions in provider order
+ * @param attributes immutable map of application-supplied ranking hints; values are not deep copied
+ */
 public record RankedCandidate<ID>(
     ID id, double score, List<SourceContribution> contributions, Map<String, Object> attributes) {
 
+  /** Validates the fused candidate and takes immutable snapshots of its collections. */
   public RankedCandidate {
     Objects.requireNonNull(id, "id must not be null");
     if (!Double.isFinite(score)) {

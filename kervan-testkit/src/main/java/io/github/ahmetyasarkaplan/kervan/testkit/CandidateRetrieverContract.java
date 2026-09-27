@@ -18,19 +18,43 @@ import org.junit.jupiter.api.Test;
  * provider order. The fixture must remain unchanged across two calls.
  *
  * <p>The retriever itself has no name; pipeline registration supplies the stable source name.
+ *
+ * @param <Q> application query type
+ * @param <ID> canonical candidate identifier type
  */
 public interface CandidateRetrieverContract<Q, ID> {
 
+  /**
+   * Returns the retriever under test.
+   *
+   * @return retriever implementation
+   */
   CandidateRetriever<Q, ID> retriever();
 
+  /**
+   * Returns a query for the deterministic fixture.
+   *
+   * @return fixture query
+   */
   Q query();
 
+  /**
+   * Returns expected canonical IDs in provider order.
+   *
+   * @return ordered fixture IDs
+   */
   List<ID> expectedCanonicalIds();
 
+  /**
+   * Supplies a positive time budget for each fixture invocation.
+   *
+   * @return provider time budget
+   */
   default Duration timeBudget() {
     return Duration.ofSeconds(5);
   }
 
+  /** Verifies canonical IDs, scores, ordering, and the full fixture limit. */
   @Test
   default void returnsOrderedCanonicalCandidatesWithinLimit() {
     List<ID> expected = List.copyOf(expectedCanonicalIds());
@@ -40,6 +64,7 @@ public interface CandidateRetrieverContract<Q, ID> {
     assertEquals(expected, candidates.stream().map(SourceCandidate::id).toList());
   }
 
+  /** Verifies the retriever respects a smaller candidate limit. */
   @Test
   default void honorsCandidateLimit() {
     List<ID> expected = List.copyOf(expectedCanonicalIds());
@@ -51,6 +76,7 @@ public interface CandidateRetrieverContract<Q, ID> {
         "limited output must use fixture canonical IDs");
   }
 
+  /** Verifies repeated fixture calls produce the same ordered candidates. */
   @Test
   default void returnsStableFixtureOnRepeat() {
     List<ID> expected = List.copyOf(expectedCanonicalIds());

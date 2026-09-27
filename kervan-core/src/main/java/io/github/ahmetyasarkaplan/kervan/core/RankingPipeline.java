@@ -37,6 +37,9 @@ import java.util.function.Supplier;
 /**
  * Coordinates independent providers concurrently, then fuses and ranks their canonical candidates.
  * Each pipeline owns one reusable virtual-thread executor. Close it when no longer needed.
+ *
+ * @param <Q> application query type
+ * @param <ID> canonical candidate identifier type
  */
 public final class RankingPipeline<Q, ID> implements AutoCloseable {
 
@@ -89,6 +92,14 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     executor = Executors.newVirtualThreadPerTaskExecutor();
   }
 
+  /**
+   * Starts a pipeline configuration with a stable name.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param name nonblank pipeline name
+   * @return a new pipeline builder
+   */
   public static <Q, ID> Builder<Q, ID> builder(String name) {
     return new Builder<>(name);
   }
@@ -97,6 +108,9 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
    * Runs providers concurrently and returns results in registration order. Cancellation interrupts
    * virtual threads on a best-effort basis; a provider may continue remote work after this method
    * stops waiting. Concurrent calls to this method are supported.
+   *
+   * @param query application query passed to each provider and the ranker
+   * @return ranked candidates and sanitized provider outcomes
    */
   public PipelineResult<ID> execute(Q query) {
     long pipelineStart = System.nanoTime();
@@ -634,6 +648,13 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     }
   }
 
+  /**
+   * Configures one reusable pipeline. At least one provider, a ranker, result limit, timeout, and
+   * failure policy are required before building.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   */
   public static final class Builder<Q, ID> {
     private final String name;
     private final List<RetrieverSpec<Q, ID>> retrievers = new ArrayList<>();
@@ -653,28 +674,60 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
       }
     }
 
+    /**
+     * Appends a provider in registration order.
+     *
+     * @param spec provider identity, implementation, and limits
+     * @return this builder
+     */
     public Builder<Q, ID> addRetriever(RetrieverSpec<Q, ID> spec) {
       retrievers.add(Objects.requireNonNull(spec, "spec must not be null"));
       return this;
     }
 
+    /**
+     * Selects the cross-provider fusion strategy and its output limit.
+     *
+     * @param strategy fusion implementation
+     * @param candidateLimit positive maximum number of fused candidates
+     * @return this builder
+     */
     public Builder<Q, ID> fusion(FusionStrategy<ID> strategy, int candidateLimit) {
       fusion = Objects.requireNonNull(strategy, "strategy must not be null");
       fusionLimit = positive(candidateLimit, "fusion candidateLimit");
       return this;
     }
 
+    /**
+     * Selects the ranker and its output limit.
+     *
+     * @param implementation ranker implementation
+     * @param candidateLimit positive maximum number of ranked candidates
+     * @return this builder
+     */
     public Builder<Q, ID> ranker(Ranker<Q, ID> implementation, int candidateLimit) {
       ranker = Objects.requireNonNull(implementation, "ranker must not be null");
       rankingLimit = positive(candidateLimit, "ranking candidateLimit");
       return this;
     }
 
+    /**
+     * Limits the final ranked result.
+     *
+     * @param candidateLimit positive maximum number of final candidates
+     * @return this builder
+     */
     public Builder<Q, ID> resultLimit(int candidateLimit) {
       resultLimit = positive(candidateLimit, "resultLimit");
       return this;
     }
 
+    /**
+     * Sets the global request deadline relative to execution start.
+     *
+     * @param timeout positive maximum pipeline duration
+     * @return this builder
+     */
     public Builder<Q, ID> timeout(Duration timeout) {
       Objects.requireNonNull(timeout, "timeout must not be null");
       if (timeout.isZero() || timeout.isNegative()) {
@@ -689,17 +742,33 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
       return this;
     }
 
+    /**
+     * Selects how optional provider failures affect the pipeline.
+     *
+     * @param policy partial-result or fail-fast behavior
+     * @return this builder
+     */
     public Builder<Q, ID> failurePolicy(FailurePolicy policy) {
       failurePolicy = Objects.requireNonNull(policy, "failurePolicy must not be null");
       return this;
     }
 
-    /** Installs optional execution instrumentation without changing pipeline outcomes. */
+    /**
+     * Installs optional execution instrumentation without changing pipeline outcomes.
+     *
+     * @param observer thread-safe execution observer
+     * @return this builder
+     */
     public Builder<Q, ID> observer(PipelineObserver observer) {
       this.observer = Objects.requireNonNull(observer, "observer must not be null");
       return this;
     }
 
+    /**
+     * Validates the configuration and creates a reusable pipeline.
+     *
+     * @return pipeline with an owned virtual-thread executor
+     */
     public RankingPipeline<Q, ID> build() {
       if (retrievers.isEmpty()) {
         throw new IllegalStateException("at least one retriever is required");

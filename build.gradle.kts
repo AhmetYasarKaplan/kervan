@@ -5,7 +5,9 @@ import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.maven.tasks.PublishToMavenRepository
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
+import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.testing.Test
+import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.jvm.tasks.Jar
 import org.gradle.plugins.signing.SigningExtension
 import org.gradle.testing.jacoco.plugins.JacocoPluginExtension
@@ -108,6 +110,11 @@ subprojects {
     extensions.configure<JavaPluginExtension> {
       toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
     }
+
+    tasks.named<Javadoc>("javadoc") {
+      (options as StandardJavadocDocletOptions).addBooleanOption("Werror", true)
+    }
+    tasks.named("check") { dependsOn(tasks.named("javadoc")) }
 
     tasks.withType<JavaCompile>().configureEach {
       options.release.set(21)

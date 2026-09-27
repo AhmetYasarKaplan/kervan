@@ -23,6 +23,11 @@ public final class RecommendationHttpRetriever implements CandidateRetriever<Pro
   private final URI endpoint;
   private final HttpClient client;
 
+  /**
+   * Creates an HTTP provider adapter with a bounded connection timeout.
+   *
+   * @param endpoint recommendation service URL without a query or fragment
+   */
   public RecommendationHttpRetriever(URI endpoint) {
     this(endpoint, HttpClient.newBuilder().connectTimeout(Duration.ofMillis(500)).build());
   }

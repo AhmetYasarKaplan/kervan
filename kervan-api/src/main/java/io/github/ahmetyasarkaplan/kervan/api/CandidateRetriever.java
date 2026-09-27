@@ -2,7 +2,12 @@ package io.github.ahmetyasarkaplan.kervan.api;
 
 import java.util.List;
 
-/** Retrieves an ordered list of candidates from one independent provider. */
+/**
+ * Retrieves an ordered list of candidates from one independent provider.
+ *
+ * @param <Q> application query type
+ * @param <ID> canonical candidate identifier type
+ */
 @FunctionalInterface
 public interface CandidateRetriever<Q, ID> {
 

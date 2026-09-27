@@ -26,6 +26,13 @@ public final class KervanPipelineRegistry implements AutoCloseable {
    * Returns a named pipeline when the component bean declarations identify the supplied query and
    * candidate-ID types. Declare retriever beans with concrete generic return types so this check
    * can run before an application request.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param name configured pipeline name
+   * @param queryType expected query type
+   * @param idType expected canonical candidate identifier type
+   * @return typed configured pipeline
    */
   @SuppressWarnings("unchecked")
   public <Q, ID> RankingPipeline<Q, ID> pipeline(
@@ -63,10 +70,20 @@ public final class KervanPipelineRegistry implements AutoCloseable {
     return (RankingPipeline<Q, ID>) entry.pipeline();
   }
 
+  /**
+   * Returns configured pipeline names in configuration order.
+   *
+   * @return immutable set of names
+   */
   public Set<String> names() {
     return Collections.unmodifiableSet(new LinkedHashSet<>(pipelines.keySet()));
   }
 
+  /**
+   * Returns the number of configured pipelines.
+   *
+   * @return pipeline count
+   */
   public int size() {
     return pipelines.size();
   }

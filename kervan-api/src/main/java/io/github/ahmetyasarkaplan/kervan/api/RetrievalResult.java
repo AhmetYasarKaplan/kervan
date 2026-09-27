@@ -23,6 +23,7 @@ public record RetrievalResult<ID>(
     Duration duration,
     RetrievalStatus status) {
 
+  /** Validates status, candidate consistency, and duration, then copies the candidate list. */
   public RetrievalResult {
     Objects.requireNonNull(retrieverName, "retrieverName must not be null");
     if (retrieverName.isBlank()) {
@@ -44,6 +45,12 @@ public record RetrievalResult<ID>(
 
   /**
    * Creates a successful retrieval result. If candidates is empty, status is automatically EMPTY.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param retrieverName stable provider name
+   * @param candidates ordered source hits
+   * @param duration nonnegative provider duration
+   * @return successful or empty retrieval result
    */
   public static <ID> RetrievalResult<ID> success(
       String retrieverName, List<SourceHit<ID>> candidates, Duration duration) {
@@ -53,28 +60,63 @@ public record RetrievalResult<ID>(
     return new RetrievalResult<>(retrieverName, snapshot, duration, status);
   }
 
-  /** Creates an empty retrieval result with zero candidates. */
+  /**
+   * Creates an empty retrieval result with zero candidates.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param retrieverName stable provider name
+   * @param duration nonnegative provider duration
+   * @return empty retrieval result
+   */
   public static <ID> RetrievalResult<ID> empty(String retrieverName, Duration duration) {
     return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.EMPTY);
   }
 
-  /** Creates a failed retrieval result without retaining exception details. */
+  /**
+   * Creates a failed retrieval result without retaining exception details.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param retrieverName stable provider name
+   * @param duration nonnegative provider duration
+   * @return failed retrieval result
+   */
   public static <ID> RetrievalResult<ID> failure(String retrieverName, Duration duration) {
     return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.FAILED);
   }
 
-  /** Creates a timed-out retrieval result. */
+  /**
+   * Creates a timed-out retrieval result.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param retrieverName stable provider name
+   * @param duration nonnegative provider duration
+   * @return timed-out retrieval result
+   */
   public static <ID> RetrievalResult<ID> timedOut(String retrieverName, Duration duration) {
     return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.TIMED_OUT);
   }
 
-  /** Creates a result for a provider unfinished at the pipeline's global deadline. */
+  /**
+   * Creates a result for a provider unfinished at the pipeline's global deadline.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param retrieverName stable provider name
+   * @param duration nonnegative provider duration
+   * @return deadline-exceeded retrieval result
+   */
   public static <ID> RetrievalResult<ID> deadlineExceeded(String retrieverName, Duration duration) {
     return new RetrievalResult<>(
         retrieverName, List.of(), duration, RetrievalStatus.DEADLINE_EXCEEDED);
   }
 
-  /** Creates a result for work cancelled after the pipeline could no longer continue. */
+  /**
+   * Creates a result for work cancelled after the pipeline could no longer continue.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param retrieverName stable provider name
+   * @param duration nonnegative provider duration
+   * @return cancelled retrieval result
+   */
   public static <ID> RetrievalResult<ID> cancelled(String retrieverName, Duration duration) {
     return new RetrievalResult<>(retrieverName, List.of(), duration, RetrievalStatus.CANCELLED);
   }

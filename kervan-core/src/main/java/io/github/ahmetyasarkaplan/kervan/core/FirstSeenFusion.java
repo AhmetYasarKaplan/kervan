@@ -10,8 +10,13 @@ import java.util.Objects;
 /**
  * Combines provider lists in their configured order, retaining the first score and position for
  * each canonical ID. It is a deterministic baseline strategy, not a relevance fusion algorithm.
+ *
+ * @param <ID> canonical candidate identifier type
  */
 public final class FirstSeenFusion<ID> implements FusionStrategy<ID> {
+
+  /** Creates a fusion strategy that follows configured provider order. */
+  public FirstSeenFusion() {}
 
   @Override
   public List<RankedCandidate<ID>> fuse(List<RetrievalResult<ID>> results, FusionContext context) {

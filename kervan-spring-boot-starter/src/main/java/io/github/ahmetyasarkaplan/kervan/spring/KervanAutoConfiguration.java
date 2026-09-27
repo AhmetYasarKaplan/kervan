@@ -17,6 +17,17 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(KervanProperties.class)
 public class KervanAutoConfiguration {
 
+  /** Creates the Spring Boot auto-configuration entry point. */
+  public KervanAutoConfiguration() {}
+
+  /**
+   * Creates the registry from configured pipelines and application component beans.
+   *
+   * @param properties external Kervan settings
+   * @param beanFactory application bean registry
+   * @param observers optional execution observer
+   * @return registry owned and closed by the Spring context
+   */
   @Bean(destroyMethod = "close")
   @ConditionalOnMissingBean
   public KervanPipelineRegistry kervanPipelineRegistry(

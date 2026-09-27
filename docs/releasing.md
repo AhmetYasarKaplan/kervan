@@ -21,8 +21,8 @@ in-memory PGP key. These values must stay outside the repository.
    Never reuse a previously published version.
 3. Set `KERVAN_SIGNING_KEY` to the ASCII-armored private PGP key and
    `KERVAN_SIGNING_PASSWORD` to its passphrase in the release environment.
-4. Run `./gradlew clean check`. This includes the Elasticsearch Testcontainers
-   tests and needs Docker. Then run
+4. Run `./gradlew clean check`. This includes warning-free Javadoc generation and
+   the Elasticsearch Testcontainers tests, which need Docker. Then run
    `./gradlew publishAllPublicationsToCentralStagingRepository`.
 5. Inspect `build/central-staging/io/github/ahmetyasarkaplan/kervan/`. Every
    library version directory should contain its main, sources, and Javadoc

@@ -4,7 +4,18 @@ import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
 import java.time.Duration;
 import java.util.Objects;
 
-/** The stable identity, implementation, execution limits and fusion weight of one provider. */
+/**
+ * The stable identity, implementation, execution limits and fusion weight of one provider.
+ *
+ * @param <Q> application query type
+ * @param <ID> canonical candidate identifier type
+ * @param name stable provider name, unique within a pipeline
+ * @param retriever provider implementation
+ * @param candidateLimit positive maximum number of unique source candidates
+ * @param timeout positive per-provider timeout
+ * @param required whether failure of this provider fails the pipeline
+ * @param weight positive finite score-fusion weight
+ */
 public record RetrieverSpec<Q, ID>(
     String name,
     CandidateRetriever<Q, ID> retriever,
@@ -13,6 +24,7 @@ public record RetrieverSpec<Q, ID>(
     boolean required,
     double weight) {
 
+  /** Validates the provider name, implementation, limits, and weight. */
   public RetrieverSpec {
     Objects.requireNonNull(name, "name must not be null");
     if (name.isBlank()) {
@@ -36,6 +48,15 @@ public record RetrieverSpec<Q, ID>(
     }
   }
 
+  /**
+   * Creates a provider specification with the default fusion weight of 1.0.
+   *
+   * @param name stable provider name
+   * @param retriever provider implementation
+   * @param candidateLimit positive maximum number of unique source candidates
+   * @param timeout positive per-provider timeout
+   * @param required whether failure of this provider fails the pipeline
+   */
   public RetrieverSpec(
       String name,
       CandidateRetriever<Q, ID> retriever,
@@ -45,11 +66,34 @@ public record RetrieverSpec<Q, ID>(
     this(name, retriever, candidateLimit, timeout, required, 1.0);
   }
 
+  /**
+   * Creates a required provider with the default fusion weight.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param name stable provider name
+   * @param retriever provider implementation
+   * @param candidateLimit positive maximum number of unique source candidates
+   * @param timeout positive per-provider timeout
+   * @return required provider specification
+   */
   public static <Q, ID> RetrieverSpec<Q, ID> required(
       String name, CandidateRetriever<Q, ID> retriever, int candidateLimit, Duration timeout) {
     return required(name, retriever, candidateLimit, timeout, 1.0);
   }
 
+  /**
+   * Creates a required provider with an explicit score-fusion weight.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param name stable provider name
+   * @param retriever provider implementation
+   * @param candidateLimit positive maximum number of unique source candidates
+   * @param timeout positive per-provider timeout
+   * @param weight positive finite score-fusion weight
+   * @return required provider specification
+   */
   public static <Q, ID> RetrieverSpec<Q, ID> required(
       String name,
       CandidateRetriever<Q, ID> retriever,
@@ -59,11 +103,34 @@ public record RetrieverSpec<Q, ID>(
     return new RetrieverSpec<>(name, retriever, candidateLimit, timeout, true, weight);
   }
 
+  /**
+   * Creates an optional provider with the default fusion weight.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param name stable provider name
+   * @param retriever provider implementation
+   * @param candidateLimit positive maximum number of unique source candidates
+   * @param timeout positive per-provider timeout
+   * @return optional provider specification
+   */
   public static <Q, ID> RetrieverSpec<Q, ID> optional(
       String name, CandidateRetriever<Q, ID> retriever, int candidateLimit, Duration timeout) {
     return optional(name, retriever, candidateLimit, timeout, 1.0);
   }
 
+  /**
+   * Creates an optional provider with an explicit score-fusion weight.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param name stable provider name
+   * @param retriever provider implementation
+   * @param candidateLimit positive maximum number of unique source candidates
+   * @param timeout positive per-provider timeout
+   * @param weight positive finite score-fusion weight
+   * @return optional provider specification
+   */
   public static <Q, ID> RetrieverSpec<Q, ID> optional(
       String name,
       CandidateRetriever<Q, ID> retriever,

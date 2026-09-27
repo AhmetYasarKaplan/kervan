@@ -14,10 +14,16 @@ public final class StructuredLoggingPipelineObserver implements PipelineObserver
 
   private final Logger logger;
 
+  /** Creates an observer with the default SLF4J logger. */
   public StructuredLoggingPipelineObserver() {
     this(LoggerFactory.getLogger(StructuredLoggingPipelineObserver.class));
   }
 
+  /**
+   * Creates an observer with an application-supplied SLF4J logger.
+   *
+   * @param logger structured event destination
+   */
   public StructuredLoggingPipelineObserver(Logger logger) {
     this.logger = Objects.requireNonNull(logger, "logger must not be null");
   }

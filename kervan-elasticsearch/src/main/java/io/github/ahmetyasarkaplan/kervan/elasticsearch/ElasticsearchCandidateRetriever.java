@@ -14,7 +14,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.function.Function;
 
-/** Adapts one Elasticsearch search response into an ordered Kervan provider list. */
+/**
+ * Adapts one Elasticsearch search response into an ordered Kervan provider list.
+ *
+ * @param <Q> application query type
+ * @param <ID> canonical candidate identifier type
+ * @param <T> Elasticsearch document type
+ */
 public final class ElasticsearchCandidateRetriever<Q, ID, T> implements CandidateRetriever<Q, ID> {
 
   private final ElasticsearchClient client;
@@ -29,6 +35,16 @@ public final class ElasticsearchCandidateRetriever<Q, ID, T> implements Candidat
     idMapper = builder.idMapper;
   }
 
+  /**
+   * Starts a retriever configuration using a caller-owned Elasticsearch client.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param <T> Elasticsearch document type
+   * @param client caller-owned Elasticsearch client
+   * @param documentType document mapping type
+   * @return retriever builder
+   */
   public static <Q, ID, T> Builder<Q, ID, T> builder(
       ElasticsearchClient client, Class<T> documentType) {
     return new Builder<>(client, documentType);
@@ -83,6 +99,13 @@ public final class ElasticsearchCandidateRetriever<Q, ID, T> implements Candidat
     return List.copyOf(candidates);
   }
 
+  /**
+   * Configures provider-native requests and canonical ID mapping.
+   *
+   * @param <Q> application query type
+   * @param <ID> canonical candidate identifier type
+   * @param <T> Elasticsearch document type
+   */
   public static final class Builder<Q, ID, T> {
     private final ElasticsearchClient client;
     private final Class<T> documentType;
@@ -94,17 +117,34 @@ public final class ElasticsearchCandidateRetriever<Q, ID, T> implements Candidat
       this.documentType = Objects.requireNonNull(documentType, "documentType must not be null");
     }
 
+    /**
+     * Supplies the provider-native request factory.
+     *
+     * @param requestFactory factory for one Elasticsearch search request
+     * @return this builder
+     */
     public Builder<Q, ID, T> requestFactory(ElasticsearchSearchRequestFactory<Q> requestFactory) {
       this.requestFactory =
           Objects.requireNonNull(requestFactory, "requestFactory must not be null");
       return this;
     }
 
+    /**
+     * Maps each native hit into the application's canonical candidate ID.
+     *
+     * @param idMapper mapping that must return a nonnull canonical ID
+     * @return this builder
+     */
     public Builder<Q, ID, T> idMapper(Function<Hit<T>, ID> idMapper) {
       this.idMapper = Objects.requireNonNull(idMapper, "idMapper must not be null");
       return this;
     }
 
+    /**
+     * Validates the request factory and ID mapper.
+     *
+     * @return configured retriever
+     */
     public ElasticsearchCandidateRetriever<Q, ID, T> build() {
       if (requestFactory == null || idMapper == null) {
         throw new IllegalStateException("requestFactory and idMapper are required");

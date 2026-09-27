@@ -13,6 +13,7 @@ import java.util.Objects;
  */
 public record RetrievalContext(int candidateLimit, Duration timeBudget) {
 
+  /** Validates the candidate limit and time budget. */
   public RetrievalContext {
     if (candidateLimit <= 0) {
       throw new IllegalArgumentException("candidateLimit must be positive: " + candidateLimit);
@@ -23,6 +24,13 @@ public record RetrievalContext(int candidateLimit, Duration timeBudget) {
     }
   }
 
+  /**
+   * Creates a context for one provider invocation.
+   *
+   * @param candidateLimit maximum number of unique candidates requested
+   * @param timeBudget positive time available when the invocation begins
+   * @return the retrieval context
+   */
   public static RetrievalContext of(int candidateLimit, Duration timeBudget) {
     return new RetrievalContext(candidateLimit, timeBudget);
   }

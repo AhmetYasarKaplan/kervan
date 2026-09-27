@@ -159,8 +159,8 @@ java -version
 On Windows, use `gradlew.bat clean check`.
 
 The wrapper downloads the pinned Gradle distribution and verifies its SHA-256.
-`check` runs formatting checks, module tests, coverage reporting, and production
-dependency-boundary validation. GitHub Actions uses the same verification command
+`check` runs formatting and Javadoc checks, module tests, coverage reporting, and
+production dependency-boundary validation. GitHub Actions uses the same command
 on Ubuntu with Temurin Java 21.
 
 ## Verification and formatting

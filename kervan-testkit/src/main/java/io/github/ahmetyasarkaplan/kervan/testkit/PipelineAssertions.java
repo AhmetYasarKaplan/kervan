@@ -15,12 +15,25 @@ public final class PipelineAssertions {
 
   private PipelineAssertions() {}
 
+  /**
+   * Asserts final canonical candidate IDs in rank order.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param result pipeline result
+   * @param expected expected IDs in rank order
+   */
   public static <ID> void assertCandidateIds(PipelineResult<ID> result, List<ID> expected) {
     Objects.requireNonNull(result, "result must not be null");
     List<ID> actual = result.candidates().stream().map(RankedCandidate::id).toList();
     assertEqual(expected, actual, "candidate IDs");
   }
 
+  /**
+   * Asserts provider statuses in registration order.
+   *
+   * @param result pipeline result
+   * @param expected statuses keyed by stable provider name
+   */
   public static void assertRetrievalStatuses(
       PipelineResult<?> result, Map<String, RetrievalStatus> expected) {
     Objects.requireNonNull(result, "result must not be null");
@@ -31,6 +44,14 @@ public final class PipelineAssertions {
     assertEqual(expected, actual, "retrieval statuses");
   }
 
+  /**
+   * Asserts the providers contributing to one final candidate.
+   *
+   * @param <ID> canonical candidate identifier type
+   * @param result pipeline result
+   * @param candidateId candidate to inspect
+   * @param expected expected provider names in contribution order
+   */
   public static <ID> void assertContributingSources(
       PipelineResult<ID> result, ID candidateId, List<String> expected) {
     Objects.requireNonNull(result, "result must not be null");

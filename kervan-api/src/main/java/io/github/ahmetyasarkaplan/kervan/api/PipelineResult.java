@@ -23,6 +23,7 @@ public record PipelineResult<ID>(
     Duration duration,
     List<RetrievalResult<ID>> retrievalResults) {
 
+  /** Validates the outcome and copies both candidate and provider result lists. */
   public PipelineResult {
     Objects.requireNonNull(pipelineName, "pipelineName must not be null");
     if (pipelineName.isBlank()) {
@@ -54,19 +55,38 @@ public record PipelineResult<ID>(
     }
   }
 
-  /** Whether an optional provider failed or exceeded a time budget. */
+  /**
+   * Whether an optional provider failed or exceeded a time budget.
+   *
+   * @return {@code true} when the result has an unsuccessful provider
+   */
   public boolean isPartial() {
     return retrievalResults.stream().anyMatch(result -> !isUsable(result.status()));
   }
 
+  /**
+   * Returns providers that succeeded, including providers with empty results.
+   *
+   * @return provider names in registration order
+   */
   public Set<String> successfulStages() {
     return stageNames(true, false);
   }
 
+  /**
+   * Returns providers that failed or exceeded a time budget.
+   *
+   * @return provider names in registration order
+   */
   public Set<String> failedStages() {
     return stageNames(false, false);
   }
 
+  /**
+   * Returns providers that timed out or exceeded the global deadline.
+   *
+   * @return provider names in registration order
+   */
   public Set<String> timedOutStages() {
     return stageNames(false, true);
   }

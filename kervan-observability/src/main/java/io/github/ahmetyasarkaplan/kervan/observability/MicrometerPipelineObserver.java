@@ -26,10 +26,21 @@ public final class MicrometerPipelineObserver implements PipelineObserver {
   private final BoundedNames pipelineNames;
   private final BoundedNames retrieverPairs;
 
+  /**
+   * Creates an observer with the default configured-name limit.
+   *
+   * @param registry metric registry
+   */
   public MicrometerPipelineObserver(MeterRegistry registry) {
     this(registry, DEFAULT_NAME_LIMIT);
   }
 
+  /**
+   * Creates an observer with a positive limit for pipeline names and provider pairs.
+   *
+   * @param registry metric registry
+   * @param maxDistinctNames maximum distinct names before grouping them under {@code _other}
+   */
   public MicrometerPipelineObserver(MeterRegistry registry, int maxDistinctNames) {
     this.registry = Objects.requireNonNull(registry, "registry must not be null");
     if (maxDistinctNames <= 0) {

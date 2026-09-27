@@ -9,11 +9,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-/** Cross-provider reciprocal rank fusion using one-based source ranks. */
+/**
+ * Cross-provider reciprocal rank fusion using one-based source ranks.
+ *
+ * @param <ID> canonical candidate identifier type
+ */
 public final class ReciprocalRankFusion<ID> implements FusionStrategy<ID> {
 
   private final int rankConstant;
 
+  /**
+   * Creates an RRF strategy with a positive rank constant.
+   *
+   * @param rankConstant positive denominator offset for each source rank
+   */
   public ReciprocalRankFusion(int rankConstant) {
     if (rankConstant <= 0) {
       throw new IllegalArgumentException("rankConstant must be positive");
@@ -21,6 +30,11 @@ public final class ReciprocalRankFusion<ID> implements FusionStrategy<ID> {
     this.rankConstant = rankConstant;
   }
 
+  /**
+   * Returns the configured denominator offset.
+   *
+   * @return positive rank constant
+   */
   public int rankConstant() {
     return rankConstant;
   }

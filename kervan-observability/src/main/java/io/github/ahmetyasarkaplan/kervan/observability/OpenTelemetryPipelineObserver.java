@@ -24,6 +24,11 @@ public final class OpenTelemetryPipelineObserver implements PipelineObserver {
 
   private final Tracer tracer;
 
+  /**
+   * Creates an observer using the supplied OpenTelemetry instance.
+   *
+   * @param telemetry tracing entry point
+   */
   public OpenTelemetryPipelineObserver(OpenTelemetry telemetry) {
     Objects.requireNonNull(telemetry, "telemetry must not be null");
     tracer = telemetry.getTracer("io.github.ahmetyasarkaplan.kervan.observability");

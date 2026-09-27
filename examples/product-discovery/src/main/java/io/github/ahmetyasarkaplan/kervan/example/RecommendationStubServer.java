@@ -9,6 +9,12 @@ import java.nio.charset.StandardCharsets;
 public final class RecommendationStubServer {
   private RecommendationStubServer() {}
 
+  /**
+   * Starts the independent local recommendation fixture on port 8085.
+   *
+   * @param args unused command-line arguments
+   * @throws IOException if the HTTP server cannot bind its port
+   */
   public static void main(String[] args) throws IOException {
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 8085), 0);
     server.createContext(

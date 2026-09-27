@@ -13,6 +13,11 @@ public final class CompositePipelineObserver implements PipelineObserver {
 
   private final List<PipelineObserver> observers;
 
+  /**
+   * Combines observers in their supplied order.
+   *
+   * @param observers nonnull observers whose failures are isolated
+   */
   public CompositePipelineObserver(List<? extends PipelineObserver> observers) {
     this.observers = List.copyOf(Objects.requireNonNull(observers, "observers must not be null"));
   }

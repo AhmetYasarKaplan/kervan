@@ -7,12 +7,23 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 
-/** Adds a configured delay before invoking another retriever. */
+/**
+ * Adds a configured delay before invoking another retriever.
+ *
+ * @param <Q> application query type
+ * @param <ID> canonical candidate identifier type
+ */
 public final class SlowRetriever<Q, ID> implements CandidateRetriever<Q, ID> {
 
   private final Duration delay;
   private final CandidateRetriever<Q, ID> delegate;
 
+  /**
+   * Wraps a retriever with a positive delay.
+   *
+   * @param delay positive delay before delegation
+   * @param delegate retriever invoked after the delay
+   */
   public SlowRetriever(Duration delay, CandidateRetriever<Q, ID> delegate) {
     this.delay = Objects.requireNonNull(delay, "delay must not be null");
     if (delay.isZero() || delay.isNegative()) {

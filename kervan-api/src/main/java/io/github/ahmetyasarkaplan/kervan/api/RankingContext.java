@@ -7,13 +7,19 @@ package io.github.ahmetyasarkaplan.kervan.api;
  */
 public record RankingContext(int candidateLimit) {
 
+  /** Validates the candidate limit. */
   public RankingContext {
     if (candidateLimit <= 0) {
       throw new IllegalArgumentException("candidateLimit must be positive: " + candidateLimit);
     }
   }
 
-  /** Convenience factory method. */
+  /**
+   * Creates a ranking context with a positive output limit.
+   *
+   * @param candidateLimit maximum number of ranked candidates
+   * @return the ranking context
+   */
   public static RankingContext of(int candidateLimit) {
     return new RankingContext(candidateLimit);
   }
