@@ -141,6 +141,46 @@ class ElasticsearchCandidateRetrieverIntegrationTest {
   }
 
   @Test
+  void shouldPromoteALowerRankedNativeHybridHitIntoTheFinalTopK() {
+    var elasticsearch = hybridRetriever(client);
+    var query = new HybridQuery("camera", List.of(1.0f, 0.0f, 0.0f));
+    var nativeHits = elasticsearch.retrieve(query, RetrievalContext.of(3, Duration.ofSeconds(5)));
+    assertThat(nativeHits).hasSizeGreaterThanOrEqualTo(2);
+
+    String firstNativeId = nativeHits.getFirst().id();
+    String lastNativeId = nativeHits.getLast().id();
+    assertThat(lastNativeId).isNotEqualTo(firstNativeId);
+    CandidateRetriever<HybridQuery, String> recommendations =
+        (ignored, context) -> List.of(SourceCandidate.of(lastNativeId, 1.0));
+
+    try (var pipeline =
+        RankingPipeline.<HybridQuery, String>builder("hybrid-top-k")
+            .addRetriever(
+                RetrieverSpec.required("elasticsearch", elasticsearch, 3, Duration.ofSeconds(5)))
+            .addRetriever(
+                RetrieverSpec.optional(
+                    "recommendations", recommendations, 1, Duration.ofSeconds(1)))
+            .ranker(new IdentityRanker<>(), 3)
+            .resultLimit(2)
+            .timeout(Duration.ofSeconds(10))
+            .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
+            .build()) {
+      var result = pipeline.execute(query);
+
+      assertThat(result.isPartial()).isFalse();
+      assertThat(result.retrievalResults().getFirst().candidates())
+          .extracting(hit -> hit.candidate().id())
+          .containsExactlyElementsOf(nativeHits.stream().map(SourceCandidate::id).toList());
+      assertThat(result.candidates())
+          .extracting(RankedCandidate::id)
+          .containsExactly(lastNativeId, firstNativeId);
+      assertThat(result.candidates().getFirst().contributions())
+          .extracting(contribution -> contribution.source())
+          .containsExactly("elasticsearch", "recommendations");
+    }
+  }
+
+  @Test
   void shouldSanitizeRemoteServerErrors() {
     var retriever =
         ElasticsearchCandidateRetriever.<String, String, Void>builder(client, Void.class)

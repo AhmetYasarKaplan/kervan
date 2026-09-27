@@ -14,6 +14,7 @@ include(
   "kervan-core",
   "kervan-elasticsearch",
   "kervan-spring-boot-starter",
+  "kervan-server",
   "kervan-observability",
   "kervan-testkit",
   "examples:product-discovery",

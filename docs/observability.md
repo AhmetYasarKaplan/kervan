@@ -1,9 +1,9 @@
 # Observability
 
 `RankingPipeline.Builder.observer(PipelineObserver)` enables optional execution
-instrumentation. The observer receives pipeline and retriever outcomes, fusion
-and ranking stage outcomes, durations, and candidate counts. Its event contract
-lives in `kervan-core`; Micrometer, OpenTelemetry, and logging implementations
+instrumentation. The observer receives pipeline and retriever outcomes, fusion,
+ranking, and policy stage outcomes, durations, and candidate counts. Its event
+contract lives in `kervan-core`; Micrometer, OpenTelemetry, and logging implementations
 live in `kervan-observability`. A pipeline without an observer uses a no-op
 implementation.
 
@@ -63,6 +63,7 @@ create a telemetry backend or exporter.
 | `kervan.fusion.input_candidates` | Number of source candidates entering fusion |
 | `kervan.fusion.output_candidates` | Number of candidates after successful fusion |
 | `kervan.ranker.duration` | Ranker duration |
+| `kervan.policy.duration` | Final policy duration |
 
 Tags use configured pipeline/retriever names and fixed outcome values. The
 default constructor admits at most 128 distinct pipeline names and 128 distinct
@@ -74,7 +75,7 @@ IDs, user IDs, request IDs, and exception messages are never metric tags.
 ## Traces and logs
 
 `OpenTelemetryPipelineObserver` creates a `kervan.pipeline` span with child
-`kervan.retrieve`, `kervan.fusion`, and `kervan.ranker` spans. Each retriever
+`kervan.retrieve`, `kervan.fusion`, `kervan.ranker`, and `kervan.policy` spans. Each retriever
 span is active while its provider runs, so instrumented provider clients can
 create child spans. Span attributes contain configured names, stage kind,
 coarse status, duration, and candidate counts. A failed pipeline or failed or

@@ -1,7 +1,7 @@
 package io.github.ahmetyasarkaplan.kervan.api;
 
 /**
- * Execution parameters provided to a ranker stage.
+ * Execution parameters provided to a ranker or final policy stage.
  *
  * @param candidateLimit the maximum number of candidates to produce after ranking.
  */
@@ -17,7 +17,7 @@ public record RankingContext(int candidateLimit) {
   /**
    * Creates a ranking context with a positive output limit.
    *
-   * @param candidateLimit maximum number of ranked candidates
+   * @param candidateLimit maximum number of final candidates requested from the stage
    * @return the ranking context
    */
   public static RankingContext of(int candidateLimit) {

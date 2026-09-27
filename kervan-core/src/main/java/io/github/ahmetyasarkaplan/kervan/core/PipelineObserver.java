@@ -26,7 +26,9 @@ public interface PipelineObserver {
     /** Cross-provider fusion. */
     FUSION,
     /** Candidate ranking. */
-    RANKER
+    RANKER,
+    /** Final candidate filtering and ordering. */
+    POLICY
   }
 
   /** Sanitized outcome of one stage. */

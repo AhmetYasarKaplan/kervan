@@ -11,7 +11,6 @@ dependencies {
   annotationProcessor(libs.spring.boot.autoconfigure.processor)
 
   testImplementation(platform(libs.spring.boot.bom))
-  testImplementation(enforcedPlatform(libs.junit.bom))
   testImplementation(libs.spring.boot.test)
   testImplementation(libs.spring.boot.starter.actuator)
   testCompileOnly(libs.jackson.annotations)

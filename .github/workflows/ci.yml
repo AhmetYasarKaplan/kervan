@@ -35,6 +35,16 @@ jobs:
       - name: Verify
         run: ./gradlew clean check
 
+      - name: Verify published starter from independent consumer
+        shell: bash
+        run: |
+          smoke_repo="$RUNNER_TEMP/kervan-consumer-repo"
+          mkdir -p "$smoke_repo"
+          ./gradlew "-Dmaven.repo.local=$smoke_repo" publishToMavenLocal
+          version="$(sed -n 's/^version=//p' gradle.properties)"
+          ./gradlew -p smoke/consumer "-PkervanVersion=$version" \
+            "-PkervanSmokeRepository=$smoke_repo" check
+
       - name: Upload verification reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

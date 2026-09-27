@@ -68,6 +68,7 @@ public final class OpenTelemetryPipelineObserver implements PipelineObserver {
             case RETRIEVER -> "kervan.retrieve";
             case FUSION -> "kervan.fusion";
             case RANKER -> "kervan.ranker";
+            case POLICY -> "kervan.policy";
           };
       Span child =
           tracer

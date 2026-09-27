@@ -41,6 +41,7 @@ val libraryModules =
     "kervan-core",
     "kervan-elasticsearch",
     "kervan-spring-boot-starter",
+    "kervan-server",
     "kervan-observability",
     "kervan-testkit",
   )
@@ -210,6 +211,15 @@ subprojects {
                       id.group != "co.elastic.clients" && !id.group.startsWith("org.elasticsearch")
                     else -> false
                   }
+                ":kervan-server" ->
+                  when (id) {
+                    is ProjectComponentIdentifier ->
+                      id.buildTreePath in
+                        setOf(":kervan-api", ":kervan-core", ":kervan-spring-boot-starter")
+                    is ModuleComponentIdentifier ->
+                      id.group != "co.elastic.clients" && !id.group.startsWith("org.elasticsearch")
+                    else -> false
+                  }
                 ":kervan-observability" ->
                   when (id) {
                     is ProjectComponentIdentifier ->
@@ -266,7 +276,7 @@ subprojects {
 val verifyPublicationArtifacts =
   tasks.register("verifyPublicationArtifacts") {
     group = "verification"
-    description = "Checks the six generated Maven publications without signing credentials."
+    description = "Checks the generated Maven publications without signing credentials."
     dependsOn(
       libraryModules.flatMap {
         listOf(
@@ -350,6 +360,22 @@ val verifyPublicationArtifacts =
               "$artifact must have compile scope in $pom"
             }
           }
+        }
+        if (module == "kervan-server") {
+          listOf(
+              publicationGroup to "kervan-spring-boot-starter",
+              "org.springframework.boot" to "spring-boot-starter-webmvc",
+            )
+            .forEach { (dependencyGroup, artifact) ->
+              val dependency =
+                dependencies.singleOrNull {
+                  it.requiredText("groupId") == dependencyGroup &&
+                    it.requiredText("artifactId") == artifact
+                } ?: error("Missing $artifact dependency in $pom")
+              check(dependency.requiredText("scope") == "compile") {
+                "$artifact must have compile scope in $pom"
+              }
+            }
         }
 
         listOf(

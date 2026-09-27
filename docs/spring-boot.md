@@ -62,6 +62,8 @@ kervan:
       ranker:
         type: identity
         candidate-limit: 3
+      policy:
+        type: identity
 ```
 
 The retriever name identifies a source in Kervan results; `bean` identifies the
@@ -74,6 +76,12 @@ custom ranker names a `Ranker<Q, ID>` bean. Without a fusion section, the core
 uses RRF with rank constant 60. Without a ranker section, the starter uses an
 identity ranker. The default fusion candidate limit is the sum of configured
 retriever limits; the default ranker limit is `result-size`.
+
+The final `policy` section is optional. It accepts `identity` or `custom`; a
+custom policy requires a `bean` naming a `RankingPolicy<Q, ID>` bean. The
+policy can filter or reorder existing ranked candidates while retaining their
+canonical IDs and provenance. If it filters results, set the ranker candidate
+limit above `result-size` to provide replacement candidates.
 
 Inject `KervanPipelineRegistry` and request a named pipeline with explicit type
 tokens:

@@ -7,6 +7,7 @@ import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
 import io.github.ahmetyasarkaplan.kervan.api.FusionStrategy;
 import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
+import io.github.ahmetyasarkaplan.kervan.api.RankingPolicy;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import io.github.ahmetyasarkaplan.kervan.core.FirstSeenFusion;
 import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
@@ -110,6 +111,26 @@ class KervanAutoConfigurationTest {
   }
 
   @Test
+  void resolvesCustomPolicyBeanAndFiltersFinalCandidates() {
+    configuredRunner(
+            "kervan.pipelines.sample.policy.type=custom",
+            "kervan.pipelines.sample.policy.bean=customPolicy")
+        .withUserConfiguration(CustomComponents.class)
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              var result =
+                  context
+                      .getBean(KervanPipelineRegistry.class)
+                      .pipeline("sample", String.class, String.class)
+                      .execute("camera");
+              assertThat(result.candidates())
+                  .extracting(RankedCandidate::id)
+                  .containsExactly("recommendation-only", "search-only");
+            });
+  }
+
+  @Test
   void missingRetrieverBeanFailsAtStartupWithConfigurationPath() {
     configuredRunner("kervan.pipelines.sample.retrievers[0].bean=missingRetriever")
         .run(
@@ -207,6 +228,33 @@ class KervanAutoConfigurationTest {
                     .isNotNull()
                     .hasStackTraceContaining("kervan.pipelines.sample.ranker.bean")
                     .hasStackTraceContaining("missingRanker"));
+  }
+
+  @Test
+  void missingCustomPolicyBeanFailsAtStartup() {
+    configuredRunner(
+            "kervan.pipelines.sample.policy.type=custom",
+            "kervan.pipelines.sample.policy.bean=missingPolicy")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .isNotNull()
+                    .hasStackTraceContaining("kervan.pipelines.sample.policy.bean")
+                    .hasStackTraceContaining("missingPolicy"));
+  }
+
+  @Test
+  void detectablePolicyGenericMismatchFailsAtStartup() {
+    configuredRunner(
+            "kervan.pipelines.sample.policy.type=custom",
+            "kervan.pipelines.sample.policy.bean=incompatiblePolicy")
+        .withUserConfiguration(IncompatiblePolicy.class)
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .isNotNull()
+                    .hasStackTraceContaining("kervan.pipelines.sample.policy.bean")
+                    .hasStackTraceContaining("java.lang.Integer"));
   }
 
   @Test
@@ -326,6 +374,20 @@ class KervanAutoConfigurationTest {
         return List.copyOf(
             reversed.subList(0, Math.min(reversed.size(), context.candidateLimit())));
       };
+    }
+
+    @Bean
+    RankingPolicy<String, String> customPolicy() {
+      return (query, candidates, context) ->
+          candidates.stream().filter(candidate -> !candidate.id().equals("shared")).toList();
+    }
+  }
+
+  @Configuration(proxyBeanMethods = false)
+  static class IncompatiblePolicy {
+    @Bean
+    RankingPolicy<Integer, String> incompatiblePolicy() {
+      return (query, candidates, context) -> candidates;
     }
   }
 

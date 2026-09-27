@@ -138,9 +138,13 @@ class ObservabilityIntegrationTest {
           assertThat(
                   meters.find("kervan.ranker.duration").tag("pipeline", "catalog").timer().count())
               .isEqualTo(1);
+          assertThat(
+                  meters.find("kervan.policy.duration").tag("pipeline", "catalog").timer().count())
+              .isEqualTo(1);
 
           List<SpanData> spans = exporter.getFinishedSpanItems();
-          assertThat(spans).hasSize(6);
+          assertThat(spans).hasSize(7);
+          assertThat(spans).extracting(SpanData::getName).contains("kervan.policy");
           SpanData parent =
               spans.stream()
                   .filter(s -> s.getName().equals("kervan.pipeline"))

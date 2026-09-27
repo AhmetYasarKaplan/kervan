@@ -8,6 +8,7 @@ import io.github.ahmetyasarkaplan.kervan.api.PipelineResult;
 import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
 import io.github.ahmetyasarkaplan.kervan.api.RankingContext;
+import io.github.ahmetyasarkaplan.kervan.api.RankingPolicy;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalContext;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalResult;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalStatus;
@@ -53,6 +54,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
   private final int fusionLimit;
   private final Ranker<Q, ID> ranker;
   private final int rankingLimit;
+  private final RankingPolicy<Q, ID> policy;
   private final int resultLimit;
   private final long timeoutNanos;
   private final FailurePolicy failurePolicy;
@@ -80,6 +82,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     }
     ranker = builder.ranker;
     rankingLimit = builder.rankingLimit;
+    policy = builder.policy;
     resultLimit = builder.resultLimit;
     timeoutNanos = builder.timeout.toNanos();
     failurePolicy = builder.failurePolicy;
@@ -109,7 +112,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
    * virtual threads on a best-effort basis; a provider may continue remote work after this method
    * stops waiting. Concurrent calls to this method are supported.
    *
-   * @param query application query passed to each provider and the ranker
+   * @param query application query passed to each provider, the ranker, and the policy
    * @return ranked candidates and sanitized provider outcomes
    */
   public PipelineResult<ID> execute(Q query) {
@@ -437,7 +440,15 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
             () ->
                 limitUnique(
                     ranker.rank(query, fused, RankingContext.of(rankingLimit)), rankingLimit));
-    return List.copyOf(ranked.subList(0, Math.min(ranked.size(), resultLimit)));
+    PipelineObserver.Stage policyStage =
+        startStage(observation, PipelineObserver.StageKind.POLICY, policyType(), ranked.size());
+    List<RankedCandidate<ID>> adjusted =
+        observeStage(
+            policyStage,
+            () ->
+                validatePolicyOutput(
+                    ranked, policy.apply(query, ranked, RankingContext.of(resultLimit))));
+    return List.copyOf(adjusted.subList(0, Math.min(adjusted.size(), resultLimit)));
   }
 
   private String fusionType() {
@@ -452,6 +463,10 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
 
   private String rankerType() {
     return ranker instanceof IdentityRanker<?, ?> ? "identity" : "custom";
+  }
+
+  private String policyType() {
+    return policy instanceof IdentityRankingPolicy<?, ?> ? "identity" : "custom";
   }
 
   private List<RankedCandidate<ID>> observeStage(
@@ -610,6 +625,26 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     return List.copyOf(snapshot.subList(0, Math.min(snapshot.size(), limit)));
   }
 
+  private static <ID> List<RankedCandidate<ID>> validatePolicyOutput(
+      List<RankedCandidate<ID>> inputs, List<RankedCandidate<ID>> output) {
+    List<RankedCandidate<ID>> snapshot =
+        List.copyOf(Objects.requireNonNull(output, "policy must not return null"));
+    Map<ID, RankedCandidate<ID>> original = new LinkedHashMap<>();
+    for (RankedCandidate<ID> candidate : inputs) {
+      original.put(candidate.id(), candidate);
+    }
+    Set<ID> seen = new HashSet<>();
+    for (RankedCandidate<ID> candidate : snapshot) {
+      if (!seen.add(candidate.id())) {
+        throw new IllegalArgumentException("policy must not return duplicate candidate IDs");
+      }
+      if (!candidate.equals(original.get(candidate.id()))) {
+        throw new IllegalArgumentException("policy must preserve ranked candidates");
+      }
+    }
+    return snapshot;
+  }
+
   /**
    * Stops accepting requests and interrupts in-flight work without waiting for uncooperative code.
    */
@@ -663,6 +698,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     private int fusionLimit;
     private Ranker<Q, ID> ranker;
     private int rankingLimit;
+    private RankingPolicy<Q, ID> policy = new IdentityRankingPolicy<>();
     private int resultLimit;
     private Duration timeout;
     private FailurePolicy failurePolicy;
@@ -709,6 +745,17 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     public Builder<Q, ID> ranker(Ranker<Q, ID> implementation, int candidateLimit) {
       ranker = Objects.requireNonNull(implementation, "ranker must not be null");
       rankingLimit = positive(candidateLimit, "ranking candidateLimit");
+      return this;
+    }
+
+    /**
+     * Selects the final candidate policy. It may filter or reorder ranked candidates.
+     *
+     * @param implementation policy implementation
+     * @return this builder
+     */
+    public Builder<Q, ID> policy(RankingPolicy<Q, ID> implementation) {
+      policy = Objects.requireNonNull(implementation, "policy must not be null");
       return this;
     }
 

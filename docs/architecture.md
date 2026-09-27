@@ -25,6 +25,8 @@ kervan-elasticsearch -> kervan-api
                      -> Elasticsearch Java client
 kervan-spring-boot-starter -> kervan-core -> kervan-api
                            -> Spring Boot
+kervan-server      -> kervan-spring-boot-starter
+                   -> Spring Boot Web MVC
 kervan-observability -> kervan-core -> kervan-api
                      -> Micrometer, OpenTelemetry API, SLF4J
 kervan-testkit       -> kervan-api
@@ -37,6 +39,7 @@ kervan-testkit       -> kervan-api
 | `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution, built-in components |
 | `kervan-elasticsearch` | `io.github.ahmetyasarkaplan.kervan.elasticsearch` | Native search request adapter and canonical hit mapping |
 | `kervan-spring-boot-starter` | `io.github.ahmetyasarkaplan.kervan.spring` | Configured pipeline assembly, component lookup, and conditional health integration |
+| `kervan-server` | `io.github.ahmetyasarkaplan.kervan.server` | HTTP access to explicitly bound configured pipelines |
 | `kervan-observability` | `io.github.ahmetyasarkaplan.kervan.observability` | Optional metrics, tracing, and structured execution logging |
 | `kervan-testkit` | `io.github.ahmetyasarkaplan.kervan.testkit` | Test fixtures, retriever contracts, and pipeline assertions |
 
@@ -59,13 +62,17 @@ types are present.
 It does not add Spring dependencies to API or core or create a search provider
 from YAML. See the [Spring Boot guide](spring-boot.md).
 
+The optional server module accepts JSON queries only for pipelines explicitly
+bound by application beans. It invokes the existing registry and contains no
+retrieval, fusion, or ranking behavior. See the [HTTP server guide](server.md).
+
 The runnable [product discovery example](../examples/product-discovery) joins an
 Elasticsearch native hybrid request, an independent HTTP recommendation service,
 and an in-memory popularity provider. It demonstrates the extension path: an
 application implements `CandidateRetriever`, maps native IDs to canonical IDs,
 and registers the bean without adding a provider protocol to core. The
-[extension guide](extension-guide.md) documents custom retrievers, fusion, and
-rankers.
+[extension guide](extension-guide.md) documents custom retrievers, fusion,
+rankers, and final ranking policies.
 
 Core exposes a small `PipelineObserver` hook for pipeline and stage outcomes.
 The optional observability module implements it using Micrometer, OpenTelemetry,
@@ -123,7 +130,10 @@ integer value.
 Retriever names must be unique. Each retriever specifies a positive timeout and
 whether it is required. Calls run concurrently, while fusion receives outcomes in
 registration order. Later stage outputs are capped to their configured limits;
-duplicate IDs returned by custom fusion or ranker stages fail the pipeline.
+duplicate IDs returned by custom fusion or ranker stages fail the pipeline. A
+policy then filters or reorders ranked candidates; its output must be a unique
+subset with unchanged candidate values, and the final result limit applies
+afterward.
 
 `FirstSeenFusion` is the baseline strategy: the first provider occurrence
 determines final position and score. Contributions from later providers are

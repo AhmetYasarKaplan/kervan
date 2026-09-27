@@ -4,7 +4,9 @@ import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
 import io.github.ahmetyasarkaplan.kervan.api.FailurePolicy;
 import io.github.ahmetyasarkaplan.kervan.api.FusionStrategy;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
+import io.github.ahmetyasarkaplan.kervan.api.RankingPolicy;
 import io.github.ahmetyasarkaplan.kervan.core.IdentityRanker;
+import io.github.ahmetyasarkaplan.kervan.core.IdentityRankingPolicy;
 import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
 import io.github.ahmetyasarkaplan.kervan.core.ReciprocalRankFusion;
@@ -115,6 +117,7 @@ final class KervanPipelineFactory {
     int defaultStageLimit = (int) Math.min(sourceCapacity, Integer.MAX_VALUE);
     types = configureFusion(builder, settings.fusion(), path + ".fusion", defaultStageLimit, types);
     types = configureRanker(builder, settings.ranker(), path + ".ranker", resultSize, types);
+    types = configurePolicy(builder, settings.policy(), path + ".policy", types);
     try {
       return new PipelineEntry(
           builder.resultLimit(resultSize).timeout(timeout).failurePolicy(failurePolicy).build(),
@@ -208,6 +211,37 @@ final class KervanPipelineFactory {
     return types;
   }
 
+  private TypePair configurePolicy(
+      RankingPipeline.Builder<Object, Object> builder,
+      KervanProperties.PolicySettings settings,
+      String path,
+      TypePair types) {
+    if (settings == null) {
+      return types;
+    }
+    String type = nonBlank(settings.type(), path + ".type");
+    RankingPolicy<?, ?> policy;
+    switch (type) {
+      case "identity" -> {
+        absent(settings.bean(), path + ".bean");
+        policy = new IdentityRankingPolicy<>();
+      }
+      case "custom" -> {
+        String beanName = nonBlank(settings.bean(), path + ".bean");
+        policy = component(beanName, RankingPolicy.class, path + ".bean");
+        types =
+            types.withQuery(
+                genericType(beanName, policy, RankingPolicy.class, 0), path + ".bean", beanName);
+        types =
+            types.withId(
+                genericType(beanName, policy, RankingPolicy.class, 1), path + ".bean", beanName);
+      }
+      default -> throw invalid(path + ".type", "unsupported policy type: " + type);
+    }
+    builder.policy(castPolicy(policy));
+    return types;
+  }
+
   private <T> T component(String beanName, Class<T> contract, String path) {
     if (!beans.containsBean(beanName)) {
       throw invalid(path, "no Spring bean named '" + beanName + "'");
@@ -285,6 +319,11 @@ final class KervanPipelineFactory {
   @SuppressWarnings("unchecked")
   private static Ranker<Object, Object> castRanker(Ranker<?, ?> value) {
     return (Ranker<Object, Object>) value;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static RankingPolicy<Object, Object> castPolicy(RankingPolicy<?, ?> value) {
+    return (RankingPolicy<Object, Object>) value;
   }
 
   record PipelineEntry(RankingPipeline<?, ?> pipeline, Class<?> queryType, Class<?> idType) {}

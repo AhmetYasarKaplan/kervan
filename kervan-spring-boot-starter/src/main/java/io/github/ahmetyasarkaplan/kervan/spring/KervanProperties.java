@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 /**
  * Type-safe external settings used to assemble named pipelines from Spring beans.
@@ -31,6 +32,7 @@ public record KervanProperties(Map<String, Pipeline> pipelines) {
    * @param retrievers configured provider specifications
    * @param fusion optional fusion settings
    * @param ranker ranking settings
+   * @param policy optional final filtering and ordering policy
    */
   public record Pipeline(
       Duration timeout,
@@ -38,7 +40,33 @@ public record KervanProperties(Map<String, Pipeline> pipelines) {
       FailurePolicy failurePolicy,
       List<Retriever> retrievers,
       Fusion fusion,
-      RankerSettings ranker) {}
+      RankerSettings ranker,
+      PolicySettings policy) {
+
+    /** Selects the canonical constructor for Spring Boot configuration binding. */
+    @ConstructorBinding
+    public Pipeline {}
+
+    /**
+     * Creates pipeline settings with the default identity policy.
+     *
+     * @param timeout global request timeout
+     * @param resultSize maximum final candidate count
+     * @param failurePolicy partial-result or fail-fast behavior
+     * @param retrievers configured provider specifications
+     * @param fusion optional fusion settings
+     * @param ranker ranking settings
+     */
+    public Pipeline(
+        Duration timeout,
+        Integer resultSize,
+        FailurePolicy failurePolicy,
+        List<Retriever> retrievers,
+        Fusion fusion,
+        RankerSettings ranker) {
+      this(timeout, resultSize, failurePolicy, retrievers, fusion, ranker, null);
+    }
+  }
 
   /**
    * Settings for one named provider bean.
@@ -76,4 +104,12 @@ public record KervanProperties(Map<String, Pipeline> pipelines) {
    * @param candidateLimit maximum ranked candidates
    */
   public record RankerSettings(String type, String bean, Integer candidateLimit) {}
+
+  /**
+   * Settings for the final policy.
+   *
+   * @param type identity or custom
+   * @param bean custom policy bean name
+   */
+  public record PolicySettings(String type, String bean) {}
 }

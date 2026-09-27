@@ -69,6 +69,22 @@ source contributions, and order ties deterministically. Do not fetch unbounded
 data or ignore the deadline. Configure it with `.ranker(ranker, limit)` or a
 named Spring bean with `ranker.type: custom`.
 
+## Custom ranking policy
+
+Implement `RankingPolicy<Q, ID>` for final deterministic filtering or ordering
+after the ranker. A policy receives the query, ranked candidates, and a
+`RankingContext` whose limit is the final result size. It can remove candidates,
+return an empty list, or reorder them. It must return each candidate at most once
+and cannot introduce a canonical ID or change its score, attributes, or source
+contributions. The pipeline checks that each returned candidate equals its
+ranked input, then applies the final result limit. Keep the ranker limit high
+enough to give a filtering policy alternatives to fill the result.
+
+Configure a policy with `.policy(policy)` on the Java builder or a named Spring
+bean with `policy.type: custom` and `policy.bean: myPolicy`. Without a policy,
+the identity policy retains the ranker's order. Policy work shares the pipeline
+deadline and is reported as a `POLICY` observation stage.
+
 ## Observability
 
 `RankingPipeline.Builder.observer(...)` accepts one `PipelineObserver`; use

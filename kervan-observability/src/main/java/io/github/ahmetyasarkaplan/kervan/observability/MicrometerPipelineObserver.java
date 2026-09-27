@@ -167,6 +167,11 @@ public final class MicrometerPipelineObserver implements PipelineObserver {
                 .tags("pipeline", pipeline, "status", outcome)
                 .register(registry)
                 .record(duration);
+        case POLICY ->
+            Timer.builder("kervan.policy.duration")
+                .tags("pipeline", pipeline, "status", outcome)
+                .register(registry)
+                .record(duration);
       }
     }
   }

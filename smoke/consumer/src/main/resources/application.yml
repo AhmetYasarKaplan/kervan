@@ -1,0 +1,51 @@
+spring:
+  main:
+    banner-mode: off
+kervan:
+  pipelines:
+    complete:
+      timeout: 2s
+      result-size: 3
+      failure-policy: partial-results
+      retrievers:
+        - name: search
+          bean: searchRetriever
+          candidate-limit: 2
+          timeout: 500ms
+          required: true
+        - name: recommendations
+          bean: recommendationRetriever
+          candidate-limit: 2
+          timeout: 500ms
+          required: false
+      fusion:
+        type: rrf
+        rank-constant: 60
+        candidate-limit: 3
+      ranker:
+        type: custom
+        bean: boostRanker
+        candidate-limit: 3
+    partial:
+      timeout: 2s
+      result-size: 2
+      failure-policy: partial-results
+      retrievers:
+        - name: search
+          bean: searchRetriever
+          candidate-limit: 2
+          timeout: 500ms
+          required: true
+        - name: unavailable
+          bean: unavailableRetriever
+          candidate-limit: 2
+          timeout: 500ms
+          required: false
+      fusion:
+        type: rrf
+        rank-constant: 60
+        candidate-limit: 2
+      ranker:
+        type: custom
+        bean: boostRanker
+        candidate-limit: 2

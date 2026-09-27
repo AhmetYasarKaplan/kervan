@@ -84,6 +84,7 @@ in-memory lambdas; it does not contact an external provider.
 | `kervan-core` | Concurrent pipeline, time budgets, failure handling, built-in fusion strategies, and identity ranker |
 | `kervan-elasticsearch` | Official-client adapter that maps one Elasticsearch search response into a provider list |
 | `kervan-spring-boot-starter` | Auto-configuration that assembles named pipelines from properties and application beans |
+| `kervan-server` | Optional HTTP adapter for explicitly bound Spring Boot pipelines |
 | `kervan-observability` | Optional Micrometer metrics, OpenTelemetry spans, and structured execution logs |
 | `kervan-testkit` | Test-only retriever fixtures, contract tests, and pipeline assertions |
 | `examples/product-discovery` | Runnable Spring Boot example with Elasticsearch, an HTTP recommendation provider, and in-memory popularity |
@@ -186,12 +187,15 @@ See the [Elasticsearch adapter guide](docs/elasticsearch.md) for a native hybrid
 request combined with an independent provider.
 See the [Spring Boot guide](docs/spring-boot.md) for YAML configuration, custom
 beans, validation, and lifecycle.
+See the [HTTP server guide](docs/server.md) to expose selected pipelines through
+an application endpoint.
 See the [observability guide](docs/observability.md) to attach metrics, tracing,
 and structured logs, and the [testkit guide](docs/testkit.md) for deterministic
 retriever contract tests and pipeline fixtures.
 See the [extension guide](docs/extension-guide.md) for implementing custom
 retrievers, fusion strategies, and rankers.
 See the [release guide](docs/releasing.md) for versioning and publication setup.
+See the [changelog](CHANGELOG.md) for the contents of the current version.
 See the [public API review](docs/api-review.md) for contract details and usage
 notes.
 

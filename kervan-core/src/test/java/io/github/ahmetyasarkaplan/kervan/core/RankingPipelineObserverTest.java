@@ -44,6 +44,11 @@ class RankingPipelineObserverTest {
                   return new IdentityRanker<String, String>().rank(query, candidates, context);
                 },
                 10)
+            .policy(
+                (query, candidates, context) -> {
+                  observer.action("policy", "POLICY:custom");
+                  return candidates;
+                })
             .resultLimit(1)
             .build()) {
       var result = pipeline.execute("sensitive query");
@@ -68,13 +73,19 @@ class RankingPipelineObserverTest {
               "action:ranker",
               "stage:finished:RANKER:custom:SUCCESS:2",
               "stage:close:RANKER:custom",
+              "stage:start:POLICY:custom:2",
+              "stage:activate:POLICY:custom",
+              "action:policy",
+              "stage:finished:POLICY:custom:SUCCESS:2",
+              "stage:close:POLICY:custom",
               "pipeline:succeeded:false:1");
       assertThat(observer.actionScopes)
           .containsEntry("retriever", true)
           .containsEntry("fusion", true)
-          .containsEntry("ranker", true);
+          .containsEntry("ranker", true)
+          .containsEntry("policy", true);
       assertThat(observer.scopes)
-          .hasSize(6)
+          .hasSize(8)
           .allSatisfy(
               scope -> {
                 assertThat(scope.thread()).isNotSameAs(caller);
@@ -82,7 +93,8 @@ class RankingPipelineObserverTest {
               });
       assertThat(observer.scopes)
           .extracting(ScopeEvent::phase)
-          .containsExactly("activate", "close", "activate", "close", "activate", "close");
+          .containsExactly(
+              "activate", "close", "activate", "close", "activate", "close", "activate", "close");
       assertThat(observer.finishes)
           .allSatisfy(finish -> assertThat(finish.duration().isNegative()).isFalse());
       assertThat(observer.success).isNotNull();
@@ -128,14 +140,15 @@ class RankingPipelineObserverTest {
               "RETRIEVER:search:SUCCESS",
               "RETRIEVER:slow:TIMED_OUT",
               "FUSION:rrf:SUCCESS",
-              "RANKER:identity:SUCCESS");
+              "RANKER:identity:SUCCESS",
+              "POLICY:identity:SUCCESS");
       assertThat(observer.finishes)
           .filteredOn(finish -> finish.kind() == PipelineObserver.StageKind.RETRIEVER)
           .extracting(StageFinish::outputCandidates)
           .containsExactlyInAnyOrder(1, 0);
       assertThat(observer.starts)
           .extracting(start -> start.kind() + ":" + start.inputCandidates())
-          .contains("FUSION:1", "RANKER:1");
+          .contains("FUSION:1", "RANKER:1", "POLICY:1");
       release.countDown();
       assertThat(slowDone.await(1, TimeUnit.SECONDS)).isTrue();
       assertThat(observer.finishes)

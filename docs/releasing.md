@@ -1,6 +1,6 @@
 # Versioning and releases
 
-Kervan's six library modules share the version in `gradle.properties` and use the
+Kervan's seven library modules share the version in `gradle.properties` and use the
 Maven group `io.github.ahmetyasarkaplan.kervan`. The runnable example is not a
 library publication. Use a new immutable version for each public release.
 Incompatible public API changes require a new major version, compatible features
@@ -28,10 +28,10 @@ This check does not need signing credentials or publish anything.
 4. Run `./gradlew clean check`. This includes warning-free Javadoc generation and
    the Elasticsearch Testcontainers tests, which need Docker. Then run
    `./gradlew centralBundle`. This clears the previous local staging directory,
-   publishes all six modules to it, verifies the staged files, and creates
+   publishes all seven modules to it, verifies the staged files, and creates
    `build/distributions/kervan-<version>-central.zip`.
 5. Inspect the ZIP before uploading it. Its root must be the `io` directory,
-   with a Maven version directory for each of the six library modules. Each
+   with a Maven version directory for each of the seven library modules. Each
    directory contains the main, sources, and Javadoc JARs and POM, with a `.asc`
    signature and `.md5` and `.sha1` checksums for each artifact. The Gradle task
    checks that the required files are present and the checksums match. Review
