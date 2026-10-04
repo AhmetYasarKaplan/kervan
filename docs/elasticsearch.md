@@ -71,7 +71,8 @@ Elasticsearch features, change the request factory; supported features and
 licensing depend on the Elasticsearch deployment. The adapter does not alter
 provider-native ranking.
 
-The adapter is tested with the official client and Elasticsearch server 9.5.0.
+The adapter is tested with the official Java client 9.5.3 and Elasticsearch server
+9.5.0.
 `./gradlew clean check` runs its Testcontainers integration tests and needs a
 working Docker daemon. The adapter does not own or close the supplied client.
 
