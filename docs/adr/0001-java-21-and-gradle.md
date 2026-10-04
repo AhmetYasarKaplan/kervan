@@ -1,7 +1,5 @@
 # ADR 0001: Java 21 and Gradle
 
-Status: Accepted
-
 ## Context
 
 Kervan needs a consistent Java baseline and a repeatable build for multiple
@@ -16,11 +14,12 @@ compiler warnings. Tests use the Java 21 toolchain; preview features are disable
 
 Use `./gradlew clean check` for local and CI verification. Share the small amount
 of common build configuration at the root and keep tool/dependency versions in
-a version catalog. Use JUnit 5, AssertJ, Spotless, and JaCoCo initially.
+a version catalog. Use JUnit Jupiter, AssertJ, Spotless, and JaCoCo.
 
 ## Consequences
 
 Contributors need a JDK 21 and network access for the first build. CI supplies
 Temurin Java 21. Build and test dependencies stay outside the production API.
-Java 21 makes virtual threads available for later execution work, but this
-decision does not establish concurrency or executor lifecycle semantics.
+Java 21 provides virtual threads. The
+[deadline and failure-policy decision](0004-deadlines-and-failure-policies.md)
+defines concurrency and executor lifecycle semantics.

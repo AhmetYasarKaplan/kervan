@@ -1,7 +1,5 @@
 # ADR 0003: Coordinate independent providers and push down native search work
 
-Status: Accepted
-
 ## Context
 
 Search engines can perform lexical retrieval, vector retrieval, hybrid fusion,
@@ -21,6 +19,8 @@ or adapter maps provider-native IDs into canonical IDs before fusion.
 ## Consequences
 
 Core remains independent of provider clients and query languages. Cross-provider
-fusion preserves each provider's returned rank and score, but does not claim
-access to the provider's internal subquery contributions unless the provider
-exposes them. Provider-specific request construction stays in adapter modules.
+fusion preserves each provider's returned rank and Kervan-facing score, but does
+not claim access to the provider's internal subquery contributions unless the
+provider exposes them. Adapters orient native distances into higher-is-better
+scores before score-based fusion. Provider-specific request construction stays
+in adapter modules.

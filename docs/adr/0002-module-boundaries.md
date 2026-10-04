@@ -1,7 +1,5 @@
 # ADR 0002: Framework-independent module boundaries
 
-Status: Accepted
-
 ## Context
 
 Kervan's embedded API must be usable without a particular application framework
@@ -10,21 +8,21 @@ responsibilities and should remain independently understandable.
 
 ## Decision
 
-Start with `kervan-api` and `kervan-core`. Public contracts and values belong in
-API; pipeline construction and execution belong in core. Core depends on API
-through Gradle's `api` configuration. API never depends on core.
+Public contracts and values belong in `kervan-api`; pipeline construction and
+execution belong in `kervan-core`. Core depends on API through Gradle's `api`
+configuration. API never depends on core.
 
 Use `io.github.ahmetyasarkaplan.kervan` as the Maven group and Java package prefix,
 with `.api` and `.core` packages for the two modules. Both modules are Java
 libraries with zero external production dependencies.
 
-Spring, Elasticsearch, HTTP, and infrastructure-specific serialization dependencies
-belong in future adapters. Build checks enforce the current production dependency
-boundary without adding a separate architecture-testing library.
+Spring, Elasticsearch, Qdrant, HTTP, and infrastructure-specific serialization
+dependencies belong in optional adapters. Build checks enforce the production
+dependency boundary without adding a separate architecture-testing library.
 
 ## Consequences
 
 Integrations can evolve without becoming prerequisites for the embedded library.
-Future production dependency additions require an explicit boundary review.
+Production dependency additions require an explicit boundary review.
 Contracts and execution semantics are introduced alongside concrete behaviors,
 avoiding empty placeholder abstractions.

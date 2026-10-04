@@ -38,6 +38,9 @@ Register `vectorRetriever` using a named `RetrieverSpec` or a Spring Boot
 `RetrievalContext.candidateLimit()` and passes its remaining time budget to the
 Qdrant client. Its future is also awaited only within that budget. The client is
 caller-owned and is not closed by the adapter.
+Timeout or worker interruption requests cancellation of the pending future;
+interruption also preserves the worker's interrupt flag. Remote work can continue
+after cancellation, so applications should keep provider-native limits in place.
 
 The request factory can build any native `QueryPoints` query, including filters,
 named vectors, and prefetches with Qdrant's own RRF or DBSF fusion. Set any
@@ -64,9 +67,13 @@ attributes when required for application ranking. Request those payload fields
 from Qdrant explicitly. The adapter reports sanitized transport, remote,
 timeout, and invalid-response failures without retaining server messages.
 
-The Testcontainers integration test creates cosine and Euclidean collections,
-queries real points, checks canonical ID mapping and score direction, and combines
-Qdrant with an independent recommendation source.
+The adapter is tested with the official Java client 1.19.0 and Qdrant server
+1.18.1. Testcontainers tests create cosine, Euclidean, and named dense/sparse
+collections. They verify canonical ID mapping, score direction, native dense/sparse
+RRF order and scores, and fusion of that native result with an independent
+recommendation source. Controlled gRPC tests cover deadline propagation, timeout,
+interruption and RPC cancellation, response limits, and sanitized failures.
+`./gradlew clean check` runs these tests and requires Docker.
 
 See [Qdrant's query API](https://qdrant.tech/documentation/search/hybrid-queries/)
 for native query options and [its score metric behavior](https://qdrant.tech/documentation/search/)

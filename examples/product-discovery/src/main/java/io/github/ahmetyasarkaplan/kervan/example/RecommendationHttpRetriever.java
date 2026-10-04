@@ -9,17 +9,20 @@ import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 
 /**
  * Example adapter for a separate HTTP recommendation service with a small tab-separated response.
  */
 public final class RecommendationHttpRetriever implements CandidateRetriever<ProductQuery, String> {
-  private static final int MAX_BODY_LENGTH = 64 * 1024;
+  private static final int MAX_RESPONSE_BYTES = 64 * 1024;
   private final URI endpoint;
   private final HttpClient client;
 
@@ -58,11 +61,16 @@ public final class RecommendationHttpRetriever implements CandidateRetriever<Pro
         HttpRequest.newBuilder(requestUri).timeout(context.timeBudget()).GET().build();
     HttpResponse<String> response;
     try {
-      response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+      response = client.send(request, ignored -> new LimitedBodySubscriber());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Recommendation request interrupted");
     } catch (IOException e) {
+      for (Throwable failure = e; failure != null; failure = failure.getCause()) {
+        if (failure instanceof ResponseTooLargeException) {
+          throw new IllegalStateException("Recommendation response is too large");
+        }
+      }
       throw new IllegalStateException("Recommendation request failed");
     }
     if (response.statusCode() != 200) {
@@ -70,9 +78,6 @@ public final class RecommendationHttpRetriever implements CandidateRetriever<Pro
           "Recommendation provider returned HTTP " + response.statusCode());
     }
     String body = response.body();
-    if (body.length() > MAX_BODY_LENGTH) {
-      throw new IllegalStateException("Recommendation response is too large");
-    }
     List<SourceCandidate<String>> candidates = new ArrayList<>();
     for (String line : body.lines().toList()) {
       if (candidates.size() == context.candidateLimit()) {
@@ -89,5 +94,65 @@ public final class RecommendationHttpRetriever implements CandidateRetriever<Pro
       }
     }
     return List.copyOf(candidates);
+  }
+
+  private static final class LimitedBodySubscriber implements HttpResponse.BodySubscriber<String> {
+    private final HttpResponse.BodySubscriber<String> delegate =
+        HttpResponse.BodySubscribers.ofString(StandardCharsets.UTF_8);
+    private Flow.Subscription subscription;
+    private int remainingBytes = MAX_RESPONSE_BYTES;
+    private boolean finished;
+
+    @Override
+    public CompletionStage<String> getBody() {
+      return delegate.getBody();
+    }
+
+    @Override
+    public void onSubscribe(Flow.Subscription subscription) {
+      if (this.subscription != null) {
+        subscription.cancel();
+        return;
+      }
+      this.subscription = subscription;
+      delegate.onSubscribe(subscription);
+    }
+
+    @Override
+    public void onNext(List<ByteBuffer> buffers) {
+      if (finished) {
+        return;
+      }
+      for (ByteBuffer buffer : buffers) {
+        if (buffer.remaining() > remainingBytes) {
+          finished = true;
+          subscription.cancel();
+          delegate.onError(new ResponseTooLargeException());
+          return;
+        }
+        remainingBytes -= buffer.remaining();
+      }
+      delegate.onNext(buffers);
+    }
+
+    @Override
+    public void onError(Throwable failure) {
+      if (!finished) {
+        finished = true;
+        delegate.onError(failure);
+      }
+    }
+
+    @Override
+    public void onComplete() {
+      if (!finished) {
+        finished = true;
+        delegate.onComplete();
+      }
+    }
+  }
+
+  private static final class ResponseTooLargeException extends IOException {
+    private static final long serialVersionUID = 1L;
   }
 }

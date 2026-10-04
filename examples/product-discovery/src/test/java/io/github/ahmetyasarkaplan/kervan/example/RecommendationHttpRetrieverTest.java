@@ -10,10 +10,17 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
+@Timeout(10)
 class RecommendationHttpRetrieverTest {
   private HttpServer server;
 
@@ -72,6 +79,77 @@ class RecommendationHttpRetrieverTest {
         .hasNoCause();
   }
 
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void rejectsOversizedFixedLengthAndChunkedResponses(boolean chunked) throws IOException {
+    startServer(200, "private-id".repeat(7000) + "\t0.5\n", ignored -> {}, chunked);
+
+    assertResponseTooLarge();
+  }
+
+  @Test
+  void limitsUtf8BytesInsteadOfDecodedCharacters() throws IOException {
+    startServer(200, "é".repeat(33 * 1024) + "\t0.5\n", ignored -> {});
+
+    assertResponseTooLarge();
+  }
+
+  @Test
+  void acceptsResponseAtTheByteLimit() throws IOException {
+    String nativeId = "p".repeat(64 * 1024 - 5);
+    startServer(200, nativeId + "\t0.5\n", ignored -> {});
+
+    var results =
+        retriever()
+            .retrieve(
+                new ProductQuery("camera", List.of(1.0f, 0.0f, 0.0f)),
+                RetrievalContext.of(1, Duration.ofSeconds(2)));
+
+    assertThat(results)
+        .extracting(candidate -> candidate.id())
+        .containsExactly("catalog:" + nativeId);
+  }
+
+  @Test
+  void rejectsOversizedStreamBeforeTheServerFinishesSending() throws Exception {
+    CountDownLatch release = new CountDownLatch(1);
+    startServer(
+        exchange -> {
+          try (exchange) {
+            exchange.sendResponseHeaders(200, 0);
+            exchange.getResponseBody().write(new byte[64 * 1024 + 1]);
+            exchange.getResponseBody().flush();
+            try {
+              release.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            }
+          }
+        });
+
+    try (var worker = Executors.newVirtualThreadPerTaskExecutor()) {
+      var result = worker.submit(this::assertResponseTooLarge);
+      try {
+        result.get(3, TimeUnit.SECONDS);
+      } finally {
+        release.countDown();
+        result.cancel(true);
+      }
+    }
+  }
+
+  private void assertResponseTooLarge() {
+    assertThatThrownBy(
+            () ->
+                retriever()
+                    .retrieve(
+                        new ProductQuery("camera", List.of(1.0f, 0.0f, 0.0f)),
+                        RetrievalContext.of(1, Duration.ofSeconds(2))))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Recommendation response is too large")
+        .hasNoCause();
+  }
+
   private RecommendationHttpRetriever retriever() {
     return new RecommendationHttpRetriever(
         java.net.URI.create(
@@ -81,17 +159,26 @@ class RecommendationHttpRetrieverTest {
   private void startServer(
       int status, String body, java.util.function.Consumer<String> queryObserver)
       throws IOException {
-    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-    server.createContext(
-        "/recommendations",
+    startServer(status, body, queryObserver, false);
+  }
+
+  private void startServer(
+      int status, String body, java.util.function.Consumer<String> queryObserver, boolean chunked)
+      throws IOException {
+    startServer(
         exchange -> {
           queryObserver.accept(exchange.getRequestURI().getRawQuery());
           byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-          exchange.sendResponseHeaders(status, bytes.length);
+          exchange.sendResponseHeaders(status, chunked ? 0 : bytes.length);
           try (var output = exchange.getResponseBody()) {
             output.write(bytes);
           }
         });
+  }
+
+  private void startServer(com.sun.net.httpserver.HttpHandler handler) throws IOException {
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/recommendations", handler);
     server.start();
   }
 }

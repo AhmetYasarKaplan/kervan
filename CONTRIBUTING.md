@@ -5,8 +5,8 @@ contract and compatibility impact can be reviewed. For focused fixes, send a pul
 request with a brief explanation and a test that exercises the behavior.
 
 Use JDK 21. Run `./gradlew clean check` before submitting a pull request (on
-Windows, use `.\gradlew.bat clean check`). The Elasticsearch integration tests
-need Docker. Run `./gradlew spotlessApply` to format Java and Gradle files.
+Windows, use `.\gradlew.bat clean check`). The Elasticsearch and Qdrant integration
+tests need Docker. Run `./gradlew spotlessApply` to format Java and Gradle files.
 
 Keep `kervan-api` independent of infrastructure libraries and keep optional
 adapters separate from `kervan-core`. Add Javadoc for public API changes and

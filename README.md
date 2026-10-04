@@ -149,8 +149,8 @@ kervan:
 Install a JDK 21 and make it available through `JAVA_HOME` or `PATH`. The build
 uses a Java 21 toolchain and does not download JDKs automatically. Git and network
 access to the Gradle distribution, Plugin Portal, and Maven Central are needed
-for an initial checkout and build. Docker is required for the Elasticsearch
-integration tests included in `check`. A separate Gradle installation is
+for an initial checkout and build. Docker is required for the Elasticsearch and
+Qdrant integration tests included in `check`. A separate Gradle installation is
 unnecessary.
 
 ```sh
@@ -207,6 +207,7 @@ notes.
 ## Design documentation
 
 - [Architecture and module boundaries](docs/architecture.md)
+- [Product scope and responsibilities](docs/project-scope.md)
 - [Java 21 and Gradle](docs/adr/0001-java-21-and-gradle.md)
 - [Framework-independent module boundaries](docs/adr/0002-module-boundaries.md)
 - [Provider boundaries and native search capabilities](docs/adr/0003-provider-boundaries.md)

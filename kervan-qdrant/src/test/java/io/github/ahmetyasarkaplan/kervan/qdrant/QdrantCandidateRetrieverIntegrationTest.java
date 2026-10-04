@@ -1,8 +1,11 @@
 package io.github.ahmetyasarkaplan.kervan.qdrant;
 
 import static io.qdrant.client.PointIdFactory.id;
+import static io.qdrant.client.QueryFactory.fusion;
 import static io.qdrant.client.QueryFactory.nearest;
 import static io.qdrant.client.ValueFactory.value;
+import static io.qdrant.client.VectorFactory.vector;
+import static io.qdrant.client.VectorsFactory.namedVectors;
 import static io.qdrant.client.VectorsFactory.vectors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -20,9 +23,16 @@ import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
 import io.github.ahmetyasarkaplan.kervan.core.WeightedMinMaxFusion;
 import io.qdrant.client.QdrantClient;
 import io.qdrant.client.QdrantGrpcClient;
+import io.qdrant.client.grpc.Collections.CreateCollection;
 import io.qdrant.client.grpc.Collections.Distance;
+import io.qdrant.client.grpc.Collections.SparseVectorConfig;
+import io.qdrant.client.grpc.Collections.SparseVectorParams;
 import io.qdrant.client.grpc.Collections.VectorParams;
+import io.qdrant.client.grpc.Collections.VectorParamsMap;
+import io.qdrant.client.grpc.Collections.VectorsConfig;
+import io.qdrant.client.grpc.Points.Fusion;
 import io.qdrant.client.grpc.Points.PointStruct;
+import io.qdrant.client.grpc.Points.PrefetchQuery;
 import io.qdrant.client.grpc.Points.QueryPoints;
 import io.qdrant.client.grpc.Points.WithPayloadSelector;
 import java.time.Duration;
@@ -38,6 +48,7 @@ class QdrantCandidateRetrieverIntegrationTest {
 
   private static final String COSINE_COLLECTION = "kervan_cosine";
   private static final String EUCLID_COLLECTION = "kervan_euclid";
+  private static final String HYBRID_COLLECTION = "kervan_hybrid";
   private static final QdrantContainer CONTAINER =
       new QdrantContainer("qdrant/qdrant:v1.18.1").withStartupTimeout(Duration.ofMinutes(2));
 
@@ -66,6 +77,33 @@ class QdrantCandidateRetrieverIntegrationTest {
                 point(3, "catalog:near", 0.1f, 0.0f, 0.0f),
                 point(4, "catalog:far", 0.9f, 0.0f, 0.0f)))
         .get();
+    client
+        .createCollectionAsync(
+            CreateCollection.newBuilder()
+                .setCollectionName(HYBRID_COLLECTION)
+                .setVectorsConfig(
+                    VectorsConfig.newBuilder()
+                        .setParamsMap(
+                            VectorParamsMap.newBuilder()
+                                .putMap(
+                                    "dense",
+                                    VectorParams.newBuilder()
+                                        .setSize(3)
+                                        .setDistance(Distance.Cosine)
+                                        .build())))
+                .setSparseVectorsConfig(
+                    SparseVectorConfig.newBuilder()
+                        .putMap("sparse", SparseVectorParams.getDefaultInstance()))
+                .build())
+        .get();
+    client
+        .upsertAsync(
+            HYBRID_COLLECTION,
+            List.of(
+                hybridPoint(10, "catalog:both", List.of(1.0f, 0.0f, 0.0f), 1, 1.0f),
+                hybridPoint(11, "catalog:dense-preferred", List.of(0.8f, 0.2f, 0.0f), 1, 0.1f),
+                hybridPoint(12, "catalog:sparse-preferred", List.of(0.0f, 1.0f, 0.0f), 1, 0.9f)))
+        .get();
   }
 
   @AfterAll
@@ -91,21 +129,21 @@ class QdrantCandidateRetrieverIntegrationTest {
 
   @Test
   void shouldFuseQdrantWithAnIndependentRecommendationSource() {
-    var qdrant = retriever(COSINE_COLLECTION, ScoreDirection.HIGHER_IS_BETTER);
+    var qdrant = hybridRetriever();
     CandidateRetriever<List<Float>, String> recommendations =
         (query, context) ->
             List.of(
-                SourceCandidate.of("catalog:tripod", 0.9),
+                SourceCandidate.of("catalog:sparse-preferred", 0.9),
                 SourceCandidate.of("catalog:recommendation-only", 0.8));
 
     try (var pipeline =
         RankingPipeline.<List<Float>, String>builder("discovery")
-            .addRetriever(RetrieverSpec.required("qdrant", qdrant, 2, Duration.ofSeconds(3)))
+            .addRetriever(RetrieverSpec.required("qdrant", qdrant, 3, Duration.ofSeconds(3)))
             .addRetriever(
                 RetrieverSpec.optional(
                     "recommendations", recommendations, 2, Duration.ofSeconds(1)))
-            .ranker(new IdentityRanker<>(), 3)
-            .resultLimit(3)
+            .ranker(new IdentityRanker<>(), 4)
+            .resultLimit(4)
             .timeout(Duration.ofSeconds(5))
             .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
             .build()) {
@@ -113,16 +151,42 @@ class QdrantCandidateRetrieverIntegrationTest {
       assertThat(result.retrievalResults())
           .extracting(retrieval -> retrieval.status())
           .containsExactly(RetrievalStatus.SUCCESS, RetrievalStatus.SUCCESS);
-      assertThat(result.candidates()).extracting(RankedCandidate::id).contains("catalog:tripod");
+      assertThat(result.candidates())
+          .extracting(RankedCandidate::id)
+          .contains("catalog:sparse-preferred");
       assertThat(
               result.candidates().stream()
-                  .filter(candidate -> candidate.id().equals("catalog:tripod"))
+                  .filter(candidate -> candidate.id().equals("catalog:sparse-preferred"))
                   .findFirst()
                   .orElseThrow()
                   .contributions())
           .extracting(contribution -> contribution.source())
           .containsExactly("qdrant", "recommendations");
     }
+  }
+
+  @Test
+  void shouldPreserveNativeDenseSparseFusionOrderAndScores() throws Exception {
+    var nativeResults =
+        client.queryAsync(hybridQuery(List.of(1.0f, 0.0f, 0.0f)).setLimit(2).build()).get();
+
+    var results =
+        hybridRetriever()
+            .retrieve(List.of(1.0f, 0.0f, 0.0f), RetrievalContext.of(2, Duration.ofSeconds(2)));
+
+    assertThat(results).hasSize(2);
+    assertThat(results.getFirst().id()).isEqualTo("catalog:both");
+    assertThat(results.getFirst().score()).isGreaterThan(results.getLast().score());
+    assertThat(results)
+        .extracting(SourceCandidate::id)
+        .containsExactlyElementsOf(
+            nativeResults.stream()
+                .map(point -> point.getPayloadOrThrow("canonicalId").getStringValue())
+                .toList());
+    assertThat(results)
+        .extracting(SourceCandidate::score)
+        .containsExactlyElementsOf(
+            nativeResults.stream().map(point -> (double) point.getScore()).toList());
   }
 
   @Test
@@ -181,6 +245,42 @@ class QdrantCandidateRetrieverIntegrationTest {
         .setId(id(id))
         .setVectors(vectors(x, y, z))
         .putAllPayload(Map.of("canonicalId", value(canonicalId)))
+        .build();
+  }
+
+  private static PointStruct hybridPoint(
+      long id, String canonicalId, List<Float> dense, int sparseIndex, float sparseWeight) {
+    return PointStruct.newBuilder()
+        .setId(id(id))
+        .setVectors(
+            namedVectors(
+                Map.of(
+                    "dense", vector(dense),
+                    "sparse", vector(List.of(sparseWeight), List.of(sparseIndex)))))
+        .putPayload("canonicalId", value(canonicalId))
+        .build();
+  }
+
+  private static QueryPoints.Builder hybridQuery(List<Float> dense) {
+    return QueryPoints.newBuilder()
+        .setCollectionName(HYBRID_COLLECTION)
+        .addPrefetch(
+            PrefetchQuery.newBuilder().setUsing("dense").setQuery(nearest(dense)).setLimit(2))
+        .addPrefetch(
+            PrefetchQuery.newBuilder()
+                .setUsing("sparse")
+                .setQuery(nearest(List.of(1.0f), List.of(1)))
+                .setLimit(3))
+        .setQuery(fusion(Fusion.RRF))
+        .setLimit(50)
+        .setWithPayload(WithPayloadSelector.newBuilder().setEnable(true));
+  }
+
+  private static QdrantCandidateRetriever<List<Float>, String> hybridRetriever() {
+    return QdrantCandidateRetriever.<List<Float>, String>builder(client)
+        .requestFactory((dense, context) -> hybridQuery(dense))
+        .idMapper(point -> point.getPayloadOrThrow("canonicalId").getStringValue())
+        .scoreDirection(ScoreDirection.HIGHER_IS_BETTER)
         .build();
   }
 
