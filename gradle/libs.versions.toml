@@ -12,7 +12,7 @@ spring-boot = "4.1.1"
 micrometer = "1.17.1"
 opentelemetry = "1.62.0"
 slf4j = "2.0.20"
-logback = "1.5.38"
+logback = "1.6.5"
 
 [libraries]
 junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
