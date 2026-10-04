@@ -254,6 +254,7 @@ subprojects {
                           "org.junit.platform",
                           "org.apiguardian",
                           "org.opentest4j",
+                          "org.jspecify",
                         )
                     else -> false
                   }

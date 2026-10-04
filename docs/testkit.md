@@ -7,8 +7,9 @@ pipeline. Within this multi-module build, the dependency is:
 testImplementation(project(":kervan-testkit"))
 ```
 
-The module depends on `kervan-api` and JUnit Jupiter API. It does not add
-test-only libraries to Kervan's production API or core modules.
+The module depends on `kervan-api` and JUnit Jupiter 6 API. Use the JUnit BOM to
+align the Jupiter engine and Platform launcher with the API version. The module
+does not add test-only libraries to Kervan's production API or core modules.
 
 ## Retriever contracts
 
