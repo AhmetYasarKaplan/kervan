@@ -175,7 +175,8 @@ on Ubuntu with Temurin Java 21.
 ```
 
 Spotless formats Java with google-java-format and Kotlin build scripts with ktfmt.
-JUnit 5 and AssertJ are configured for each module. Compiler warnings are enabled.
+JUnit Jupiter and AssertJ are configured for each module. Compiler warnings are
+enabled.
 Tool versions are pinned in the [version catalog](gradle/libs.versions.toml) and
 [wrapper configuration](gradle/wrapper/gradle-wrapper.properties).
 
