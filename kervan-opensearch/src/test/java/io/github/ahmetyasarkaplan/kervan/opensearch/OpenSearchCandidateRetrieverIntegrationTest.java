@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import org.apache.hc.core5.http.HttpHost;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -136,44 +137,53 @@ class OpenSearchCandidateRetrieverIntegrationTest {
                                                                     weights.weights(0.1f, 0.9f))))))
                 .acknowledged())
         .isTrue();
+    Function<String, SearchRequest.Builder> nativeRequest =
+        query ->
+            new SearchRequest.Builder()
+                .index(INDEX)
+                .searchPipeline(searchPipeline)
+                .query(
+                    q ->
+                        q.hybrid(
+                            h ->
+                                h.queries(
+                                        lexical ->
+                                            lexical.match(
+                                                m ->
+                                                    m.field("title")
+                                                        .query(v -> v.stringValue(query))))
+                                    .queries(
+                                        vector ->
+                                            vector.knn(
+                                                k ->
+                                                    k.field("embedding")
+                                                        .vector(List.of(1f, 0f, 0f))
+                                                        .k(2)))));
     var hybrid =
         OpenSearchCandidateRetriever.<String, String, Product>builder(client, Product.class)
-            .requestFactory(
-                (query, context) ->
-                    new SearchRequest.Builder()
-                        .index(INDEX)
-                        .searchPipeline(searchPipeline)
-                        .query(
-                            q ->
-                                q.hybrid(
-                                    h ->
-                                        h.queries(
-                                                lexical ->
-                                                    lexical.match(
-                                                        m ->
-                                                            m.field("title")
-                                                                .query(v -> v.stringValue(query))))
-                                            .queries(
-                                                vector ->
-                                                    vector.knn(
-                                                        k ->
-                                                            k.field("embedding")
-                                                                .vector(List.of(1f, 0f, 0f))
-                                                                .k(2))))))
+            .requestFactory((query, context) -> nativeRequest.apply(query))
             .idMapper(hit -> hit.source().canonicalId())
             .attributesMapper(hit -> Map.of("title", hit.source().title()))
             .scoreDirection(ScoreDirection.HIGHER_IS_BETTER)
             .build();
 
     var hits = hybrid.retrieve("camera", RetrievalContext.of(3, Duration.ofSeconds(5)));
+    var nativeHits =
+        client.search(nativeRequest.apply("camera").size(3).build(), Product.class).hits().hits();
 
     // The lexical-only document and vector-only document both survive the native hybrid query.
     assertThat(hits)
         .extracting(SourceCandidate::id)
         .containsExactlyInAnyOrder("catalog:lexical", "catalog:vector", "catalog:shared");
-    assertThat(hits.getFirst().id()).isEqualTo("catalog:vector");
-    // Only the vector clause matches this document: normalized 1.0 * configured weight 0.9.
-    assertThat(hits.getFirst().score()).isCloseTo(0.9, within(0.00001));
+    // Preserve the engine's actual normalized ranking, including its native collection semantics.
+    assertThat(hits)
+        .extracting(SourceCandidate::id)
+        .containsExactlyElementsOf(
+            nativeHits.stream().map(hit -> hit.source().canonicalId()).toList());
+    for (int index = 0; index < hits.size(); index++) {
+      assertThat(hits.get(index).score())
+          .isCloseTo(nativeHits.get(index).score(), within(0.000001));
+    }
     assertThat(hits)
         .allSatisfy(
             hit ->
