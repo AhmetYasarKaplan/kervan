@@ -52,6 +52,8 @@ Maven:
 
 Add an optional module only when you need its integration; see [What's included](#whats-included).
 
+<a id="embedded-usage"></a>
+
 ## Use it
 
 This example has two independent candidate providers. Both return `product-2`,
