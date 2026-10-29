@@ -1,5 +1,7 @@
 # Kervan
 
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.ahmetyasarkaplan.kervan/kervan-core)](https://central.sonatype.com/artifact/io.github.ahmetyasarkaplan.kervan/kervan-core)
+
 **Bring candidates from many sources. Return one reliable ranking.**
 
 Kervan is a Java 21 library for coordinating candidates from independently
@@ -13,7 +15,7 @@ execution instrumentation, and reusable test fixtures.
 Batch reranking can score the combined candidate window with an application
 model or rule, retaining fusion scores and using explicit fallback when needed.
 
-## Intended request flow
+## How it works
 
 ```text
 Request
@@ -25,7 +27,7 @@ Request
   -> final ranked results
 ```
 
-The embedded Java library is the primary design target.
+Kervan runs as an embedded library inside your Java application.
 
 Kervan operates across provider boundaries. A search engine can perform its own
 lexical, vector, and hybrid retrieval inside one provider request; the application
@@ -39,9 +41,35 @@ execution outcomes. A backend's own hybrid search can serve a request entirely
 within that backend; Kervan is useful when the application also coordinates
 other candidate providers or shared ranking behavior.
 
-To consume this release in another application, use the
-[GitHub Maven bundle](docs/getting-started.md#use-the-github-maven-bundle) or
-[build the Maven artifacts from source](docs/getting-started.md#use-the-source-release-in-another-application).
+## Installation
+
+Kervan 1.0.0 is available from Maven Central. Use JDK 21 or later.
+
+Gradle (Kotlin DSL):
+
+```kotlin
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation("io.github.ahmetyasarkaplan.kervan:kervan-core:1.0.0")
+}
+```
+
+Maven:
+
+```xml
+<dependency>
+  <groupId>io.github.ahmetyasarkaplan.kervan</groupId>
+  <artifactId>kervan-core</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+Add the optional modules your application needs using the same group and version.
+See [Getting started](docs/getting-started.md) for installation alternatives,
+Spring Boot configuration, and examples.
 
 ## Embedded usage
 

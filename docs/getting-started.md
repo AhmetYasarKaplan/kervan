@@ -1,7 +1,41 @@
 # Getting started
 
 Kervan runs inside a Java 21 application. Start with two independent candidate
-providers and a single pipeline. The steps below build modules from source.
+providers and a single pipeline. All eleven library modules are available from
+Maven Central at version 1.0.0.
+
+## Install from Maven Central
+
+In a Gradle application:
+
+```kotlin
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation("io.github.ahmetyasarkaplan.kervan:kervan-core:1.0.0")
+}
+```
+
+In a Maven application:
+
+```xml
+<dependency>
+  <groupId>io.github.ahmetyasarkaplan.kervan</groupId>
+  <artifactId>kervan-core</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+Core exposes the shared API transitively. Optional modules use the same group
+and version: `kervan-elasticsearch`, `kervan-opensearch`, `kervan-qdrant`,
+`kervan-pgvector`, `kervan-reranking`, `kervan-spring-boot-starter`, `kervan-server`,
+`kervan-observability`, and `kervan-testkit`. The shared API is also published
+separately as `kervan-api`.
+
+Browse the [published core artifact](https://central.sonatype.com/artifact/io.github.ahmetyasarkaplan.kervan/kervan-core/1.0.0).
+Building Kervan from source or downloading the GitHub bundle is optional.
 
 ## Build from this repository
 
@@ -72,7 +106,7 @@ dependencies {
 ```
 
 On Windows use a path such as `C:/dev/kervan-artifacts`. This GitHub bundle is a
-local Maven repository distribution; it does not require a Maven Central upload.
+local Maven repository distribution, offered alongside the Maven Central release.
 
 ## Develop inside this repository
 
