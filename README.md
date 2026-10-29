@@ -7,8 +7,11 @@ operated providers. An application can combine search, recommendation, popularit
 or custom provider results into one ranked list with canonical IDs and inspectable
 source contributions. Its synchronous pipeline includes concurrent provider
 calls, time budgets, failure policies, rank and score fusion, candidate limits,
-and source provenance. Optional modules provide Elasticsearch and Qdrant adapters,
-Spring Boot configuration, execution instrumentation, and reusable test fixtures.
+and source provenance. Optional modules provide Elasticsearch, OpenSearch,
+Qdrant and pgvector adapters, a Cohere reranking client, Spring Boot configuration,
+execution instrumentation, and reusable test fixtures.
+Batch reranking can score the combined candidate window with an application
+model or rule, retaining fusion scores and using explicit fallback when needed.
 
 ## Intended request flow
 
@@ -28,6 +31,17 @@ Kervan operates across provider boundaries. A search engine can perform its own
 lexical, vector, and hybrid retrieval inside one provider request; the application
 can then combine that result with independently operated providers. Search indexing,
 embedding generation, and model training/serving are outside Kervan's scope.
+
+Use Kervan when an application needs one ranking across independently operated
+search, recommendation, popularity, or custom candidate providers. It preserves
+each backend's native query features and provides shared ranking policies and
+execution outcomes. A backend's own hybrid search can serve a request entirely
+within that backend; Kervan is useful when the application also coordinates
+other candidate providers or shared ranking behavior.
+
+To consume this release in another application, use the
+[GitHub Maven bundle](docs/getting-started.md#use-the-github-maven-bundle) or
+[build the Maven artifacts from source](docs/getting-started.md#use-the-source-release-in-another-application).
 
 ## Embedded usage
 
@@ -82,18 +96,21 @@ in-memory lambdas; it does not contact an external provider.
 | Module | Responsibility |
 | --- | --- |
 | `kervan-api` | Public contracts and domain-independent value types |
-| `kervan-core` | Concurrent pipeline, time budgets, failure handling, built-in fusion strategies, and identity ranker |
+| `kervan-core` | Concurrent pipeline, fusion, bounded batch reranking, time budgets, and final ranking policies |
 | `kervan-elasticsearch` | Official-client adapter that maps one Elasticsearch search response into a provider list |
 | `kervan-qdrant` | Official-client adapter for Qdrant vector or native hybrid query results |
+| `kervan-opensearch` | Official-client adapter for native OpenSearch queries and canonical hit mapping |
+| `kervan-pgvector` | JDBC adapter for prepared pgvector SQL, canonical row mapping and bounded waits |
+| `kervan-reranking` | Ready Cohere v2 batch scorer with bulk hydration and bounded HTTP requests |
 | `kervan-spring-boot-starter` | Auto-configuration that assembles named pipelines from properties and application beans |
 | `kervan-server` | Optional HTTP adapter for explicitly bound Spring Boot pipelines |
 | `kervan-observability` | Optional Micrometer metrics, OpenTelemetry spans, and structured execution logs |
-| `kervan-testkit` | Test-only retriever fixtures, contract tests, and pipeline assertions |
+| `kervan-testkit` | Retriever fixtures, contract tests, pipeline assertions, and offline relevance metrics |
 | `examples/product-discovery` | Runnable Spring Boot example with Elasticsearch, an HTTP recommendation provider, and in-memory popularity |
 
 Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
-`kervan-elasticsearch` and `kervan-qdrant` depend on `kervan-api` and their
-respective pinned official Java clients. API and core have no external production
+`kervan-elasticsearch`, `kervan-opensearch` and `kervan-qdrant` depend on `kervan-api`
+and their respective pinned official Java clients. API and core have no external production
 dependencies. The Maven group and Java package prefix are
 `io.github.ahmetyasarkaplan.kervan`. The Spring Boot starter depends on core and
 Spring Boot, while provider adapters remain independent optional modules.
@@ -101,7 +118,24 @@ The observability module depends on core and its telemetry APIs; testkit depends
 on API and JUnit Jupiter. Neither adds an infrastructure dependency to API or
 core.
 
+The [OpenSearch](docs/opensearch.md), [pgvector](docs/pgvector.md), and
+[Cohere reranking](docs/cohere-reranking.md) integrations are optional dependencies.
+The JDBC adapter depends on API and the JDK; applications choose their JDBC driver
+and connection pool. Client, driver and JSON dependencies stay outside API/core.
+For similarity-based diversity, core supplies
+[maximal marginal relevance](docs/diversity.md), preserving original ranking scores.
+
 ## Run the product discovery example
+
+Start with a local fusion-versus-reranking comparison that needs no services:
+
+```sh
+./gradlew :examples:product-discovery:runReranking
+```
+
+See the [batch reranking guide](docs/reranking.md) for scoring callbacks, limits,
+fallback and score inspection, and [ranking policies](docs/ranking-policies.md)
+for pins and group quotas.
 
 With JDK 21 and Docker running, start Elasticsearch and the separate demo
 recommendation process, then run the Spring Boot application in another terminal:
@@ -149,8 +183,8 @@ kervan:
 Install a JDK 21 and make it available through `JAVA_HOME` or `PATH`. The build
 uses a Java 21 toolchain and does not download JDKs automatically. Git and network
 access to the Gradle distribution, Plugin Portal, and Maven Central are needed
-for an initial checkout and build. Docker is required for the Elasticsearch and
-Qdrant integration tests included in `check`. A separate Gradle installation is
+for an initial checkout and build. Docker is required for the Elasticsearch,
+OpenSearch, Qdrant and pgvector integration tests included in `check`. A separate Gradle installation is
 unnecessary.
 
 ```sh

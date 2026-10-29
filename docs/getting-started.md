@@ -13,8 +13,68 @@ distribution and dependencies on the first run. Run the fast API and core checks
 ```
 
 Windows PowerShell: use `.\gradlew.bat` in place of `./gradlew`. For the full
-suite, run `./gradlew clean check`; the Elasticsearch integration tests require
-Docker.
+suite, run `./gradlew clean check`; the Elasticsearch, OpenSearch, Qdrant and
+pgvector integration tests require Docker.
+
+## Use the source release in another application
+
+Build and install the library artifacts into your local Maven repository:
+
+```sh
+./gradlew publishToMavenLocal
+```
+
+In a separate Gradle application, resolve the core artifact:
+
+```kotlin
+repositories {
+  mavenLocal()
+  mavenCentral()
+}
+
+dependencies {
+  implementation("io.github.ahmetyasarkaplan.kervan:kervan-core:1.0.0")
+}
+```
+
+The optional modules use the same group and version. Add the provider adapters
+your application needs; core exposes the shared API transitively. For a Maven
+application, the coordinates are the same and the default local repository
+contains the artifacts installed by `publishToMavenLocal`.
+
+See the independent [starter](../smoke/consumer/README.md) and
+[adapter](../smoke/adapters-consumer/README.md) applications for checks that resolve
+generated Maven POMs without using this repository's source classpath.
+
+## Use the GitHub Maven bundle
+
+The [1.0.0 GitHub release](https://github.com/AhmetYasarKaplan/kervan/releases/tag/v1.0.0)
+also provides `kervan-1.0.0-maven.zip` and `SHA256SUMS`. Verify the archive's
+SHA-256 against `SHA256SUMS`, then extract it to a local directory. The extracted
+directory contains the Maven `io/github/...` layout with POMs, main, sources and
+Javadoc JARs for all eleven modules.
+
+Use that directory as the repository for Kervan's group and Maven Central for
+external dependencies:
+
+```kotlin
+repositories {
+  exclusiveContent {
+    forRepository { maven { url = uri("/absolute/path/to/extracted-kervan") } }
+    filter { includeGroup("io.github.ahmetyasarkaplan.kervan") }
+  }
+  mavenCentral()
+}
+
+dependencies {
+  implementation("io.github.ahmetyasarkaplan.kervan:kervan-core:1.0.0")
+}
+```
+
+On Windows use a path such as `C:/dev/kervan-artifacts`. This GitHub bundle is a
+local Maven repository distribution; it does not require a Maven Central upload.
+
+## Develop inside this repository
 
 In a Gradle project included in this build, depend on `kervan-core`:
 
@@ -67,6 +127,11 @@ for validation and custom strategies.
 
 ## Run the product discovery example
 
+For a service-free demonstration of fusion followed by batch reranking, run
+`./gradlew :examples:product-discovery:runReranking`. It prints the changed
+ordering and separate fusion/reranking scores. The scoring rule is a transparent
+title match; applications can supply a model through the same callback.
+
 The example combines three genuine provider boundaries:
 
 1. Elasticsearch 9.5.0 performs lexical `match` and vector `knn` in **one native
@@ -96,7 +161,9 @@ Elasticsearch and recommendation URLs with Spring properties
 query vector is application-supplied demo data; Kervan does not generate vectors.
 
 The output lists ranked IDs with their contributing sources, then the status of
-each provider. If the optional HTTP service is unavailable, the result should be
+each provider and the ranking outcome. One batch catalog lookup and a title-token
+scoring rule rerank the fused candidates for `camera tripod`.
+If the optional HTTP service is unavailable, the result should be
 marked partial and retain search/popularity results. If required Elasticsearch is
 unavailable, execution fails. Stop the demo service with Ctrl+C and the local
 Elasticsearch container with:

@@ -58,7 +58,9 @@ final class CandidateMerger {
     }
 
     private void add(SourceHit<ID> hit, String source) {
-      contributions.add(new SourceContribution(source, hit.rank(), hit.candidate().score()));
+      contributions.add(
+          new SourceContribution(
+              source, hit.rank(), hit.candidate().score(), hit.candidate().attributes()));
       hit.candidate().attributes().forEach(attributes::putIfAbsent);
     }
 

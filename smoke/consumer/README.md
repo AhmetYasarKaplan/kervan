@@ -4,6 +4,10 @@ This is a standalone Gradle application, outside Kervan's multi-project build. I
 declares only the published `kervan-spring-boot-starter` as a Kervan dependency.
 Its run task verifies Spring Boot auto-configuration, application-provided
 retrievers and ranker, source provenance, and optional-provider failure behavior.
+Two pipelines retain the legacy ranker configuration. A third uses the published
+batch scorer and bounded ranker settings, verifying model ordering, separate
+fusion/model scores, the input and output limits, and fused fallback on model
+failure. Its ranking degradation remains independent of provider completeness.
 
 Publish the current checkout to a disposable Maven repository, then run the
 consumer against that repository. On Unix-like systems, from the repository root:

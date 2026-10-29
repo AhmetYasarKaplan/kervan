@@ -78,6 +78,27 @@ uses RRF with rank constant 60. Without a ranker section, the starter uses an
 identity ranker. The default fusion candidate limit is the sum of configured
 retriever limits; the default ranker limit is `result-size`.
 
+For bounded reranking, register a `BatchScoringRanker<Q, ID>` as a `Ranker<Q, ID>`
+bean and configure its independent input window, timeout and failure policy:
+
+```yaml
+ranker:
+  type: custom
+  bean: productRanker
+  input-limit: 50
+  candidate-limit: 10
+  timeout: 100ms
+  failure-policy: keep-fused
+```
+
+Set `input-limit`, `timeout` and `failure-policy` together. The output
+`candidate-limit` must not exceed `input-limit`. `keep-fused` retains fusion
+ordering on a ranking failure, timeout or exhausted budget; `fail` fails the
+pipeline. `result.rankingOutcome()` reports that decision, and `isDegraded()`
+includes both ranking fallback and provider partial results. Existing ranker
+configuration without these three settings retains its previous behavior.
+See [batch reranking](reranking.md) for complete execution semantics.
+
 The final `policy` section is optional. It accepts `identity` or `custom`; a
 custom policy requires a `bean` naming a `RankingPolicy<Q, ID>` bean. The
 policy can filter or reorder existing ranked candidates while retaining their

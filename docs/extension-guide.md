@@ -69,6 +69,13 @@ source contributions, and order ties deterministically. Do not fetch unbounded
 data or ignore the deadline. Configure it with `.ranker(ranker, limit)` or a
 named Spring bean with `ranker.type: custom`.
 
+For a single scoring call over the fused window, use `BatchScoringRanker` and
+an application-owned `BatchScorer`. Configure `RankerSpec` for input/output
+limits, timeout and `KEEP_FUSED` or `FAIL` behavior. The callback can batch-load
+typed application data and invoke a model with `context.remainingBudget()`.
+The [batch reranking guide](reranking.md) describes exact score coverage,
+stable ties, score provenance and explicit fallback.
+
 ## Custom ranking policy
 
 Implement `RankingPolicy<Q, ID>` for final deterministic filtering or ordering
@@ -84,6 +91,9 @@ Configure a policy with `.policy(policy)` on the Java builder or a named Spring
 bean with `policy.type: custom` and `policy.bean: myPolicy`. Without a policy,
 the identity policy retains the ranker's order. Policy work shares the pipeline
 deadline and is reported as a `POLICY` observation stage.
+
+Built-in [pinning, group quotas and composition](ranking-policies.md) cover
+common final adjustments while preserving candidate values and source data.
 
 ## Observability
 

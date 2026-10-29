@@ -8,6 +8,7 @@ import io.github.ahmetyasarkaplan.kervan.api.RankingPolicy;
 import io.github.ahmetyasarkaplan.kervan.core.IdentityRanker;
 import io.github.ahmetyasarkaplan.kervan.core.IdentityRankingPolicy;
 import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
+import io.github.ahmetyasarkaplan.kervan.core.RankerSpec;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
 import io.github.ahmetyasarkaplan.kervan.core.ReciprocalRankFusion;
 import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
@@ -216,7 +217,23 @@ final class KervanPipelineFactory {
       }
       default -> throw invalid(path + ".type", "unsupported ranker type: " + type);
     }
-    builder.ranker(castRanker(ranker), limit);
+    if (settings.inputLimit() != null
+        || settings.timeout() != null
+        || settings.failurePolicy() != null) {
+      int inputLimit = positive(settings.inputLimit(), path + ".input-limit");
+      Duration rankerTimeout = positive(settings.timeout(), path + ".timeout");
+      if (settings.failurePolicy() == null) {
+        throw invalid(path + ".failure-policy", "a ranker failure policy is required");
+      }
+      if (limit > inputLimit) {
+        throw invalid(path + ".candidate-limit", "must not exceed input-limit");
+      }
+      builder.ranker(
+          new RankerSpec<>(
+              castRanker(ranker), inputLimit, limit, rankerTimeout, settings.failurePolicy()));
+    } else {
+      builder.ranker(castRanker(ranker), limit);
+    }
     return types;
   }
 

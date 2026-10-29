@@ -9,3 +9,7 @@
 .DS_Store
 Thumbs.db
 *-project-brief.md
+.env
+.env.*
+!.env.example
+.local-experiments/

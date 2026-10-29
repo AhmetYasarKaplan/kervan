@@ -14,10 +14,17 @@ configuration, telemetry, and HTTP exposure are optional integrations.
 - Fuse results across providers using reciprocal rank, weighted reciprocal rank,
   weighted min-max, or first-seen ordering. Apply application rankers and final
   filtering or ordering policies within defined candidate limits.
+- Score a bounded fused window through an application-owned batch scorer, with
+  a remaining time budget, explicit fused fallback and inspectable ranking outcomes.
+- Preserve source attributes and separate fusion/reranking scores; provide
+  deterministic existing-candidate pins and group quotas for final results.
 - Report successful, empty, failed, timed-out, deadline-exhausted, and cancelled
   provider outcomes without retaining remote error details.
-- Provide optional official-client Elasticsearch and Qdrant adapters, Spring Boot
-  assembly, execution instrumentation, an HTTP binding, and retriever test tools.
+- Provide optional Elasticsearch, Qdrant, OpenSearch and JDBC pgvector adapters,
+  a Cohere batch scorer, Spring Boot assembly, instrumentation, an HTTP binding,
+  retriever test tools and offline relevance metrics.
+- Select a diverse candidate order with maximal marginal relevance using
+  application-supplied relevance and similarity functions.
 
 API and core have no external production dependencies. Provider clients,
 frameworks, and serialization belong in optional modules. Public contracts stay

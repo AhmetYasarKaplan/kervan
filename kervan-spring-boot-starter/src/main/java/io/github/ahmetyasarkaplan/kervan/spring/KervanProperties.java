@@ -1,6 +1,7 @@
 package io.github.ahmetyasarkaplan.kervan.spring;
 
 import io.github.ahmetyasarkaplan.kervan.api.FailurePolicy;
+import io.github.ahmetyasarkaplan.kervan.api.RankerFailurePolicy;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -102,8 +103,33 @@ public record KervanProperties(Map<String, Pipeline> pipelines) {
    * @param type built-in ranker kind
    * @param bean custom ranker bean name
    * @param candidateLimit maximum ranked candidates
+   * @param inputLimit maximum fused candidates passed to a bounded ranker
+   * @param timeout optional ranking time budget; requires inputLimit and failurePolicy
+   * @param failurePolicy behavior when bounded ranking fails or times out
    */
-  public record RankerSettings(String type, String bean, Integer candidateLimit) {}
+  public record RankerSettings(
+      String type,
+      String bean,
+      Integer candidateLimit,
+      Integer inputLimit,
+      Duration timeout,
+      RankerFailurePolicy failurePolicy) {
+
+    /** Selects the complete settings constructor for external configuration binding. */
+    @ConstructorBinding
+    public RankerSettings {}
+
+    /**
+     * Creates ranking settings using the pipeline's existing finalization budget.
+     *
+     * @param type identity or custom
+     * @param bean custom ranker bean name
+     * @param candidateLimit maximum ranked candidates
+     */
+    public RankerSettings(String type, String bean, Integer candidateLimit) {
+      this(type, bean, candidateLimit, null, null, null);
+    }
+  }
 
   /**
    * Settings for the final policy.

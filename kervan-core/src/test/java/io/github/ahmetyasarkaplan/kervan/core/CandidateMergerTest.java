@@ -3,6 +3,8 @@ package io.github.ahmetyasarkaplan.kervan.core;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.ahmetyasarkaplan.kervan.api.FusionContext;
+import io.github.ahmetyasarkaplan.kervan.api.FusionStrategy;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalResult;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.SourceContribution;
@@ -45,6 +47,39 @@ class CandidateMergerTest {
     assertThat(merged.attributes())
         .containsEntry("category", "books")
         .containsEntry("inStock", true);
+    assertThat(merged.contributions())
+        .containsExactly(
+            new SourceContribution("search", 1, 2.0, Map.of("category", "books")),
+            new SourceContribution(
+                "recommendations", 3, 0.2, Map.of("category", "media", "inStock", true)));
+  }
+
+  @Test
+  void shouldPreserveConflictingProviderAttributesThroughEveryBuiltInFusion() {
+    var search =
+        result(
+            "search",
+            new SourceHit<>(new SourceCandidate<>("same", 2.0, Map.of("title", "lexical")), 1));
+    var vector =
+        result(
+            "vector",
+            new SourceHit<>(new SourceCandidate<>("same", 0.2, Map.of("title", "semantic")), 2));
+    List<FusionStrategy<String>> strategies =
+        List.of(
+            new FirstSeenFusion<>(),
+            new ReciprocalRankFusion<>(60),
+            new WeightedReciprocalRankFusion<>(60),
+            new WeightedMinMaxFusion<>());
+
+    for (FusionStrategy<String> strategy : strategies) {
+      var candidate = strategy.fuse(List.of(search, vector), FusionContext.of(1)).getFirst();
+
+      assertThat(candidate.attributes()).containsExactlyEntriesOf(Map.of("title", "lexical"));
+      assertThat(candidate.contributions())
+          .containsExactly(
+              new SourceContribution("search", 1, 2.0, Map.of("title", "lexical")),
+              new SourceContribution("vector", 2, 0.2, Map.of("title", "semantic")));
+    }
   }
 
   @Test

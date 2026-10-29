@@ -24,3 +24,10 @@ kervan:
         type: rrf
         rank-constant: 60
         candidate-limit: 8
+      ranker:
+        type: custom
+        bean: productRanker
+        input-limit: 8
+        candidate-limit: 5
+        timeout: 300ms
+        failure-policy: keep-fused

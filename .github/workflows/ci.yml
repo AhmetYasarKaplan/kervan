@@ -33,7 +33,7 @@ jobs:
           validate-wrappers: true
 
       - name: Verify
-        run: ./gradlew clean check
+        run: ./gradlew clean check verifyPublicationArtifacts
 
       - name: Verify published starter from independent consumer
         shell: bash
@@ -43,6 +43,8 @@ jobs:
           ./gradlew "-Dmaven.repo.local=$smoke_repo" publishToMavenLocal
           version="$(sed -n 's/^version=//p' gradle.properties)"
           ./gradlew -p smoke/consumer "-PkervanVersion=$version" \
+            "-PkervanSmokeRepository=$smoke_repo" check
+          ./gradlew -p smoke/adapters-consumer "-PkervanVersion=$version" \
             "-PkervanSmokeRepository=$smoke_repo" check
 
       - name: Upload verification reports

@@ -29,16 +29,27 @@ public class ProductDiscoveryApplication {
               .getBean(KervanPipelineRegistry.class)
               .pipeline("discovery", ProductQuery.class, String.class);
       PipelineResult<String> result =
-          pipeline.execute(new ProductQuery("camera", List.of(1.0f, 0.0f, 0.0f)));
-      System.out.println("\nRanked product IDs (partial=" + result.isPartial() + "):");
+          pipeline.execute(new ProductQuery("camera tripod", List.of(1.0f, 0.0f, 0.0f)));
+      System.out.println(
+          "\nRanked product IDs (partial="
+              + result.isPartial()
+              + ", degraded="
+              + result.isDegraded()
+              + ", ranking="
+              + result.rankingOutcome().status()
+              + "):");
       result
           .candidates()
           .forEach(
               candidate ->
                   System.out.printf(
-                      "%s score=%.6f sources=%s%n",
+                      "%s score=%.6f fusion=%s sources=%s%n",
                       candidate.id(),
                       candidate.score(),
+                      candidate
+                          .rerankingScore()
+                          .map(scores -> scores.fusionScore())
+                          .orElse(candidate.score()),
                       candidate.contributions().stream().map(source -> source.source()).toList()));
       result
           .retrievalResults()

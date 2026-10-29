@@ -3,6 +3,7 @@ package io.github.ahmetyasarkaplan.kervan.example;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.SearchRequest;
 import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
+import io.github.ahmetyasarkaplan.kervan.api.Ranker;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import io.github.ahmetyasarkaplan.kervan.elasticsearch.ElasticsearchCandidateRetriever;
 import java.net.URI;
@@ -13,6 +14,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 class ProductDiscoveryConfiguration {
+
+  @Bean
+  Ranker<ProductQuery, String> productRanker() {
+    return ProductReranker.titleMatch();
+  }
 
   @Bean(destroyMethod = "close")
   ElasticsearchClient elasticsearchClient(
