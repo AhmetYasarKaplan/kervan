@@ -25,6 +25,11 @@ kervan-elasticsearch -> kervan-api
                      -> Elasticsearch Java client
 kervan-qdrant       -> kervan-api
                      -> Qdrant Java client
+kervan-opensearch   -> kervan-api
+                     -> OpenSearch Java client
+kervan-pgvector     -> kervan-api -> JDBC in the JDK
+kervan-reranking    -> kervan-api
+                     -> Jackson JSON mapper, JDK HTTP client
 kervan-spring-boot-starter -> kervan-core -> kervan-api
                            -> Spring Boot
 kervan-server      -> kervan-spring-boot-starter
@@ -41,6 +46,9 @@ kervan-testkit       -> kervan-api
 | `kervan-core` | `io.github.ahmetyasarkaplan.kervan.core` | Pipeline construction and execution, built-in components |
 | `kervan-elasticsearch` | `io.github.ahmetyasarkaplan.kervan.elasticsearch` | Native search request adapter and canonical hit mapping |
 | `kervan-qdrant` | `io.github.ahmetyasarkaplan.kervan.qdrant` | Native vector or hybrid query adapter and canonical point mapping |
+| `kervan-opensearch` | `io.github.ahmetyasarkaplan.kervan.opensearch` | Native OpenSearch queries, canonical hit mapping and bounded asynchronous wait |
+| `kervan-pgvector` | `io.github.ahmetyasarkaplan.kervan.pgvector` | Prepared application SQL, canonical row mapping and bounded JDBC operations |
+| `kervan-reranking` | `io.github.ahmetyasarkaplan.kervan.reranking` | Cohere v2 scoring protocol with bulk document mapping and bounded HTTP I/O |
 | `kervan-spring-boot-starter` | `io.github.ahmetyasarkaplan.kervan.spring` | Configured pipeline assembly, component lookup, and conditional health integration |
 | `kervan-server` | `io.github.ahmetyasarkaplan.kervan.server` | HTTP access to explicitly bound configured pipelines |
 | `kervan-observability` | `io.github.ahmetyasarkaplan.kervan.observability` | Optional metrics, tracing, and structured execution logging |
@@ -63,6 +71,14 @@ and hybrid prefetches. It applies the candidate limit and remaining time budget,
 then maps ordered points to canonical IDs. The application declares whether the
 native score is a similarity or a distance; distance is negated before score-based
 fusion. One native Qdrant query is one Kervan provider list.
+
+OpenSearch retains its native request API, while pgvector retains application SQL
+and parameter binding. Both map canonical IDs and require explicit score direction.
+See [OpenSearch](opensearch.md) and [pgvector](pgvector.md) for timeout, client and
+connection ownership. [Cohere scoring](cohere-reranking.md) runs after cross-provider
+fusion; the application supplies model selection, credentials and bulk document
+hydration. [MMR](diversity.md) selects a diverse order using explicit relevance and
+similarity callbacks without overwriting candidate scores.
 
 The Spring Boot starter binds `kervan.pipelines` settings and resolves named
 application beans to build pipelines at context startup. It owns their lifecycle
@@ -150,6 +166,8 @@ determines final position and score. Contributions from later providers are
 appended in provider order, and attributes from the first occurrence of each key
 win. `IdentityRanker` preserves this order while applying its candidate limit.
 This baseline does not calculate a relevance-fusion score.
+Each contribution also retains its source's complete attribute map, including
+keys that collide in the merged top-level map.
 
 `ReciprocalRankFusion` sums `1 / (k + source rank)` for each contribution, where
 `k` is a positive rank constant. It uses source order rather than raw scores, so
@@ -195,3 +213,13 @@ already completed results to be fused and ranked. Custom fusion or ranking code
 that exceeds this bounded interval is cancelled and the pipeline fails with
 `GLOBAL_DEADLINE_EXCEEDED`. This grace means total elapsed time can slightly
 exceed the configured timeout.
+
+`RankerSpec` adds a bounded ranking window with its own timeout and explicit
+failure policy. It uses the same pipeline executor and the remaining original
+deadline; finalization grace is reserved for local assembly and fallback, not
+remote scoring. `BatchScoringRanker` scores the whole selected window once,
+orders equal scores stably and preserves separate fusion/reranking scores.
+`KEEP_FUSED` uses unchanged fused candidates on ranking failure or timeout;
+`FAIL` fails the pipeline. The result exposes `rankingOutcome` and `isDegraded`,
+while `isPartial` retains its provider-only meaning. See the
+[reranking guide](reranking.md) for window, cancellation and fallback details.

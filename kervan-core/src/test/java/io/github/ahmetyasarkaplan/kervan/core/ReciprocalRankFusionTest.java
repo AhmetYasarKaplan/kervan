@@ -88,7 +88,7 @@ class ReciprocalRankFusionTest {
     assertThat(fused).hasSize(1);
     assertThat(fused.getFirst().attributes()).containsEntry("category", "books");
     assertThat(fused.getFirst().contributions())
-        .containsExactly(new SourceContribution("search", 1, 2.0));
+        .containsExactly(new SourceContribution("search", 1, 2.0, Map.of("category", "books")));
   }
 
   @Test

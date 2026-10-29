@@ -8,7 +8,9 @@ import io.github.ahmetyasarkaplan.kervan.api.FusionStrategy;
 import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
 import io.github.ahmetyasarkaplan.kervan.api.RankingPolicy;
+import io.github.ahmetyasarkaplan.kervan.api.RankingStatus;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
+import io.github.ahmetyasarkaplan.kervan.core.BatchScoringRanker;
 import io.github.ahmetyasarkaplan.kervan.core.FirstSeenFusion;
 import io.github.ahmetyasarkaplan.kervan.core.PipelineObserver;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
@@ -131,6 +133,72 @@ class KervanAutoConfigurationTest {
                   .containsExactly("recommendation-only", "search-only", "shared");
               assertThat(result.candidates().getLast().score()).isEqualTo(9.0);
             });
+  }
+
+  @Test
+  void configuresBoundedBatchRankingAndReportsFallback() {
+    configuredRunner(
+            "kervan.pipelines.sample.ranker.type=custom",
+            "kervan.pipelines.sample.ranker.bean=batchRanker",
+            "kervan.pipelines.sample.ranker.input-limit=3",
+            "kervan.pipelines.sample.ranker.candidate-limit=2",
+            "kervan.pipelines.sample.ranker.timeout=500ms",
+            "kervan.pipelines.sample.ranker.failure-policy=keep-fused")
+        .withUserConfiguration(BatchComponents.class)
+        .run(
+            context -> {
+              assertThat(context).hasNotFailed();
+              var pipeline =
+                  context
+                      .getBean(KervanPipelineRegistry.class)
+                      .pipeline("sample", String.class, String.class);
+              var ranked = pipeline.execute("camera");
+              assertThat(ranked.candidates())
+                  .extracting(RankedCandidate::id)
+                  .containsExactly("search-only", "recommendation-only");
+              assertThat(ranked.rankingOutcome().status()).isEqualTo(RankingStatus.SUCCESS);
+              assertThat(ranked.isDegraded()).isFalse();
+              assertThat(ranked.candidates().getFirst().rerankingScore()).isPresent();
+              var fallback = pipeline.execute("fail-ranking");
+              assertThat(fallback.candidates())
+                  .extracting(RankedCandidate::id)
+                  .containsExactly("shared", "recommendation-only");
+              assertThat(fallback.rankingOutcome().status()).isEqualTo(RankingStatus.FAILED);
+              assertThat(fallback.rankingOutcome().fallbackUsed()).isTrue();
+              assertThat(fallback.isPartial()).isFalse();
+              assertThat(fallback.isDegraded()).isTrue();
+              assertThat(fallback.candidates())
+                  .allSatisfy(candidate -> assertThat(candidate.rerankingScore()).isEmpty());
+            });
+  }
+
+  @Test
+  void rejectsIncompleteOrContradictoryBoundedRankingSettings() {
+    configuredRunner(
+            "kervan.pipelines.sample.ranker.type=identity",
+            "kervan.pipelines.sample.ranker.timeout=100ms")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .hasStackTraceContaining("ranker.input-limit"));
+    configuredRunner(
+            "kervan.pipelines.sample.ranker.type=identity",
+            "kervan.pipelines.sample.ranker.input-limit=2",
+            "kervan.pipelines.sample.ranker.candidate-limit=3",
+            "kervan.pipelines.sample.ranker.timeout=100ms",
+            "kervan.pipelines.sample.ranker.failure-policy=fail")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .hasStackTraceContaining("ranker.candidate-limit"));
+    configuredRunner(
+            "kervan.pipelines.sample.ranker.type=identity",
+            "kervan.pipelines.sample.ranker.input-limit=3",
+            "kervan.pipelines.sample.ranker.timeout=100ms")
+        .run(
+            context ->
+                assertThat(context.getStartupFailure())
+                    .hasStackTraceContaining("ranker.failure-policy"));
   }
 
   @Test
@@ -403,6 +471,23 @@ class KervanAutoConfigurationTest {
     RankingPolicy<String, String> customPolicy() {
       return (query, candidates, context) ->
           candidates.stream().filter(candidate -> !candidate.id().equals("shared")).toList();
+    }
+  }
+
+  @Configuration(proxyBeanMethods = false)
+  static class BatchComponents {
+    @Bean
+    Ranker<String, String> batchRanker() {
+      return new BatchScoringRanker<>(
+          (query, candidates, context) -> {
+            if (query.equals("fail-ranking")) {
+              throw new IllegalStateException("private remote response");
+            }
+            assertThat(context.remainingBudget())
+                .isPositive()
+                .isLessThanOrEqualTo(Duration.ofMillis(500));
+            return Map.of("shared", 0.1, "recommendation-only", 0.5, "search-only", 0.9);
+          });
     }
   }
 

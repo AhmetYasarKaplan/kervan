@@ -16,15 +16,34 @@ import java.util.Set;
  * @param candidates final ordered candidates
  * @param duration total elapsed time
  * @param retrievalResults one result per configured provider, in registration order
+ * @param rankingOutcome sanitized ranking outcome, independent of retrieval completeness
  */
 public record PipelineResult<ID>(
     String pipelineName,
     List<RankedCandidate<ID>> candidates,
     Duration duration,
-    List<RetrievalResult<ID>> retrievalResults) {
+    List<RetrievalResult<ID>> retrievalResults,
+    RankingOutcome rankingOutcome) {
+
+  /**
+   * Creates a result without ranking metadata for compatibility with existing result producers.
+   *
+   * @param pipelineName pipeline name
+   * @param candidates final candidates
+   * @param duration elapsed time
+   * @param retrievalResults provider outcomes
+   */
+  public PipelineResult(
+      String pipelineName,
+      List<RankedCandidate<ID>> candidates,
+      Duration duration,
+      List<RetrievalResult<ID>> retrievalResults) {
+    this(pipelineName, candidates, duration, retrievalResults, RankingOutcome.notReported());
+  }
 
   /** Validates the outcome and copies both candidate and provider result lists. */
   public PipelineResult {
+    Objects.requireNonNull(rankingOutcome, "rankingOutcome must not be null");
     Objects.requireNonNull(pipelineName, "pipelineName must not be null");
     if (pipelineName.isBlank()) {
       throw new IllegalArgumentException("pipelineName must not be blank");
@@ -62,6 +81,15 @@ public record PipelineResult<ID>(
    */
   public boolean isPartial() {
     return retrievalResults.stream().anyMatch(result -> !isUsable(result.status()));
+  }
+
+  /**
+   * Whether optional retrieval or bounded ranking required degraded operation.
+   *
+   * @return whether providers failed or ranking used fused fallback
+   */
+  public boolean isDegraded() {
+    return isPartial() || rankingOutcome.isDegraded();
   }
 
   /**

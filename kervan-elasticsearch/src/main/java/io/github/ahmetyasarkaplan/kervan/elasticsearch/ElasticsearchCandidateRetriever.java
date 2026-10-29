@@ -11,6 +11,7 @@ import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -27,12 +28,14 @@ public final class ElasticsearchCandidateRetriever<Q, ID, T> implements Candidat
   private final Class<T> documentType;
   private final ElasticsearchSearchRequestFactory<Q> requestFactory;
   private final Function<Hit<T>, ID> idMapper;
+  private final Function<Hit<T>, Map<String, Object>> attributesMapper;
 
   private ElasticsearchCandidateRetriever(Builder<Q, ID, T> builder) {
     client = builder.client;
     documentType = builder.documentType;
     requestFactory = builder.requestFactory;
     idMapper = builder.idMapper;
+    attributesMapper = builder.attributesMapper;
   }
 
   /**
@@ -89,12 +92,13 @@ public final class ElasticsearchCandidateRetriever<Q, ID, T> implements Candidat
         throw new ElasticsearchRetrievalException(
             ElasticsearchRetrievalException.Reason.INVALID_RESPONSE);
       }
-      ID id = idMapper.apply(hit);
-      if (id == null) {
+      try {
+        candidates.add(
+            new SourceCandidate<>(idMapper.apply(hit), score, attributesMapper.apply(hit)));
+      } catch (RuntimeException e) {
         throw new ElasticsearchRetrievalException(
             ElasticsearchRetrievalException.Reason.INVALID_RESPONSE);
       }
-      candidates.add(SourceCandidate.of(id, score));
     }
     return List.copyOf(candidates);
   }
@@ -111,6 +115,7 @@ public final class ElasticsearchCandidateRetriever<Q, ID, T> implements Candidat
     private final Class<T> documentType;
     private ElasticsearchSearchRequestFactory<Q> requestFactory;
     private Function<Hit<T>, ID> idMapper;
+    private Function<Hit<T>, Map<String, Object>> attributesMapper = ignored -> Map.of();
 
     private Builder(ElasticsearchClient client, Class<T> documentType) {
       this.client = Objects.requireNonNull(client, "client must not be null");
@@ -137,6 +142,23 @@ public final class ElasticsearchCandidateRetriever<Q, ID, T> implements Candidat
      */
     public Builder<Q, ID, T> idMapper(Function<Hit<T>, ID> idMapper) {
       this.idMapper = Objects.requireNonNull(idMapper, "idMapper must not be null");
+      return this;
+    }
+
+    /**
+     * Maps each native hit into application-supplied ranking hints.
+     *
+     * <p>The default returns an empty map. The returned map must have nonnull keys and values and
+     * is shallow-copied into the candidate; nested values are not copied. Invalid maps and mapping
+     * failures are reported as sanitized {@code INVALID_RESPONSE} failures.
+     *
+     * @param attributesMapper mapping that must return a nonnull attributes map
+     * @return this builder
+     */
+    public Builder<Q, ID, T> attributesMapper(
+        Function<Hit<T>, Map<String, Object>> attributesMapper) {
+      this.attributesMapper =
+          Objects.requireNonNull(attributesMapper, "attributesMapper must not be null");
       return this;
     }
 

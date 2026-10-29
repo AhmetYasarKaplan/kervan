@@ -41,6 +41,9 @@ val libraryModules =
     "kervan-core",
     "kervan-elasticsearch",
     "kervan-qdrant",
+    "kervan-opensearch",
+    "kervan-pgvector",
+    "kervan-reranking",
     "kervan-spring-boot-starter",
     "kervan-server",
     "kervan-observability",
@@ -204,8 +207,12 @@ subprojects {
                   id is ProjectComponentIdentifier && id.buildTreePath == ":kervan-api"
                 ":kervan-elasticsearch" ->
                   id !is ProjectComponentIdentifier || id.buildTreePath == ":kervan-api"
-                ":kervan-qdrant" ->
+                ":kervan-qdrant",
+                ":kervan-opensearch",
+                ":kervan-reranking" ->
                   id !is ProjectComponentIdentifier || id.buildTreePath == ":kervan-api"
+                ":kervan-pgvector" ->
+                  id is ProjectComponentIdentifier && id.buildTreePath == ":kervan-api"
                 ":kervan-spring-boot-starter" ->
                   when (id) {
                     is ProjectComponentIdentifier ->
@@ -213,7 +220,9 @@ subprojects {
                     is ModuleComponentIdentifier ->
                       id.group != "co.elastic.clients" &&
                         !id.group.startsWith("org.elasticsearch") &&
-                        id.group != "io.qdrant"
+                        id.group != "io.qdrant" &&
+                        !id.group.startsWith("org.opensearch") &&
+                        id.group != "org.postgresql"
                     else -> false
                   }
                 ":kervan-server" ->
@@ -224,7 +233,9 @@ subprojects {
                     is ModuleComponentIdentifier ->
                       id.group != "co.elastic.clients" &&
                         !id.group.startsWith("org.elasticsearch") &&
-                        id.group != "io.qdrant"
+                        id.group != "io.qdrant" &&
+                        !id.group.startsWith("org.opensearch") &&
+                        id.group != "org.postgresql"
                     else -> false
                   }
                 ":kervan-observability" ->
@@ -535,7 +546,7 @@ tasks.named("check") {
 tasks.named("clean") { dependsOn(subprojects.map { "${it.path}:clean" }) }
 
 tasks.wrapper {
-  gradleVersion = "9.7.1"
+  gradleVersion = "9.8.1"
   distributionType = Wrapper.DistributionType.BIN
-  distributionSha256Sum = "acd53f1edaf02f1a8ff99879f8a34b302661a057d9b063ae9e35b552f804d20a"
+  distributionSha256Sum = "dce76f55f8e251a3a1f130eb120f30b3d271de2b76c9b0729d316b5a1b6dc01f"
 }

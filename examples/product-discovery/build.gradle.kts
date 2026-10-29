@@ -22,3 +22,10 @@ tasks.register<JavaExec>("runRecommendations") {
   classpath = sourceSets.main.get().runtimeClasspath
   mainClass.set("io.github.ahmetyasarkaplan.kervan.example.RecommendationStubServer")
 }
+
+tasks.register<JavaExec>("runReranking") {
+  group = "application"
+  description = "Compares fusion and batch reranking on a local product fixture."
+  classpath = sourceSets.main.get().runtimeClasspath
+  mainClass.set("io.github.ahmetyasarkaplan.kervan.example.RerankingExample")
+}

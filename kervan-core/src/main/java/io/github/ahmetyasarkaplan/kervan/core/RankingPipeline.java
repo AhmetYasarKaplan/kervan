@@ -7,8 +7,11 @@ import io.github.ahmetyasarkaplan.kervan.api.PipelineExecutionException;
 import io.github.ahmetyasarkaplan.kervan.api.PipelineResult;
 import io.github.ahmetyasarkaplan.kervan.api.RankedCandidate;
 import io.github.ahmetyasarkaplan.kervan.api.Ranker;
+import io.github.ahmetyasarkaplan.kervan.api.RankerFailurePolicy;
 import io.github.ahmetyasarkaplan.kervan.api.RankingContext;
+import io.github.ahmetyasarkaplan.kervan.api.RankingOutcome;
 import io.github.ahmetyasarkaplan.kervan.api.RankingPolicy;
+import io.github.ahmetyasarkaplan.kervan.api.RankingStatus;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalContext;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalResult;
 import io.github.ahmetyasarkaplan.kervan.api.RetrievalStatus;
@@ -53,6 +56,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
   private final FusionStrategy<ID> fusion;
   private final int fusionLimit;
   private final Ranker<Q, ID> ranker;
+  private final RankerSpec<Q, ID> rankerSpec;
   private final int rankingLimit;
   private final RankingPolicy<Q, ID> policy;
   private final int resultLimit;
@@ -81,6 +85,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
       fusionLimit = builder.fusionLimit;
     }
     ranker = builder.ranker;
+    rankerSpec = builder.rankerSpec;
     rankingLimit = builder.rankingLimit;
     policy = builder.policy;
     resultLimit = builder.resultLimit;
@@ -223,10 +228,13 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
             name, PipelineExecutionException.Reason.ALL_RETRIEVERS_FAILED, results);
       }
 
-      List<RankedCandidate<ID>> candidates =
-          finishWithinDeadline(query, results, pipelineStart, observation);
+      FinishOutcome<ID> outcome = finishWithinDeadline(query, results, pipelineStart, observation);
       return new PipelineResult<>(
-          name, candidates, elapsed(pipelineStart, System.nanoTime()), results);
+          name,
+          outcome.candidates(),
+          elapsed(pipelineStart, System.nanoTime()),
+          results,
+          outcome.rankingOutcome());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw abort(PipelineExecutionException.Reason.INTERRUPTED, jobs, pipelineStart);
@@ -363,7 +371,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     return new PipelineExecutionException(name, reason, results(jobs));
   }
 
-  private List<RankedCandidate<ID>> finishWithinDeadline(
+  private FinishOutcome<ID> finishWithinDeadline(
       Q query,
       List<RetrievalResult<ID>> results,
       long pipelineStart,
@@ -375,38 +383,49 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
           name, PipelineExecutionException.Reason.GLOBAL_DEADLINE_EXCEEDED, results);
     }
 
+    FinishControl control = new FinishControl(pipelineStart, observation);
     Future<FinishOutcome<ID>> finish;
     synchronized (lifecycleLock) {
       if (closed) {
         throw new PipelineExecutionException(
             name, PipelineExecutionException.Reason.CLOSED, results);
       }
-      finish =
-          executor.submit(
-              () -> {
-                List<RankedCandidate<ID>> candidates = finish(query, results, observation);
-                return new FinishOutcome<>(candidates, System.nanoTime());
-              });
+      finish = executor.submit(() -> finish(query, results, control));
       activeFutures.add(finish);
     }
     try {
       remaining = finishRemaining(pipelineStart);
       FinishOutcome<ID> outcome = finish.get(Math.max(0, remaining), TimeUnit.NANOSECONDS);
       if (finishRemaining(pipelineStart, outcome.completedAt()) < 0) {
+        control.stop(PipelineObserver.StageStatus.DEADLINE_EXCEEDED);
         throw new PipelineExecutionException(
             name, PipelineExecutionException.Reason.GLOBAL_DEADLINE_EXCEEDED, results);
       }
-      return outcome.candidates();
+      if (closed) {
+        control.stop(PipelineObserver.StageStatus.CANCELLED);
+        throw new PipelineExecutionException(
+            name, PipelineExecutionException.Reason.CLOSED, results);
+      }
+      return outcome;
     } catch (TimeoutException e) {
+      control.stop(PipelineObserver.StageStatus.DEADLINE_EXCEEDED);
       finish.cancel(true);
       throw new PipelineExecutionException(
           name, PipelineExecutionException.Reason.GLOBAL_DEADLINE_EXCEEDED, results);
     } catch (ExecutionException e) {
       throw new PipelineExecutionException(
-          name, PipelineExecutionException.Reason.STAGE_FAILED, results);
+          name,
+          closed
+              ? PipelineExecutionException.Reason.CLOSED
+              : finishRemaining(pipelineStart) <= 0
+                  ? PipelineExecutionException.Reason.GLOBAL_DEADLINE_EXCEEDED
+                  : PipelineExecutionException.Reason.STAGE_FAILED,
+          results);
     } catch (CancellationException e) {
+      control.stop(PipelineObserver.StageStatus.CANCELLED);
       throw new PipelineExecutionException(name, PipelineExecutionException.Reason.CLOSED, results);
     } catch (InterruptedException e) {
+      control.stop(PipelineObserver.StageStatus.CANCELLED);
       finish.cancel(true);
       throw e;
     } finally {
@@ -416,15 +435,15 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     }
   }
 
-  private List<RankedCandidate<ID>> finish(
-      Q query, List<RetrievalResult<ID>> results, PipelineObserver.Execution observation) {
+  private FinishOutcome<ID> finish(
+      Q query, List<RetrievalResult<ID>> results, FinishControl control) {
     int inputCount =
         (int)
             Math.min(
                 results.stream().mapToLong(result -> result.candidates().size()).sum(),
                 Integer.MAX_VALUE);
-    PipelineObserver.Stage fusionStage =
-        startStage(observation, PipelineObserver.StageKind.FUSION, fusionType(), inputCount);
+    ObservedStage fusionStage =
+        control.start(PipelineObserver.StageKind.FUSION, fusionType(), inputCount);
     List<RankedCandidate<ID>> fused =
         observeStage(
             fusionStage,
@@ -432,23 +451,170 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
                 limitUnique(
                     fusion.fuse(results, FusionContext.of(fusionLimit, sourceWeights)),
                     fusionLimit));
-    PipelineObserver.Stage rankerStage =
-        startStage(observation, PipelineObserver.StageKind.RANKER, rankerType(), fused.size());
-    List<RankedCandidate<ID>> ranked =
-        observeStage(
-            rankerStage,
-            () ->
-                limitUnique(
-                    ranker.rank(query, fused, RankingContext.of(rankingLimit)), rankingLimit));
-    PipelineObserver.Stage policyStage =
-        startStage(observation, PipelineObserver.StageKind.POLICY, policyType(), ranked.size());
+    RankingResult<ID> ranking;
+    if (rankerSpec == null) {
+      ObservedStage rankerStage =
+          control.start(PipelineObserver.StageKind.RANKER, rankerType(), fused.size());
+      List<RankedCandidate<ID>> ranked =
+          observeStage(
+              rankerStage,
+              () ->
+                  limitUnique(
+                      ranker.rank(query, fused, RankingContext.of(rankingLimit)), rankingLimit));
+      ranking =
+          new RankingResult<>(
+              ranked,
+              new RankingOutcome(
+                  ranked.isEmpty() ? RankingStatus.EMPTY : RankingStatus.SUCCESS,
+                  fused.size(),
+                  ranked.size(),
+                  rankerStage.duration()));
+    } else {
+      ranking = rankWithinBudget(query, fused, control);
+    }
+    List<RankedCandidate<ID>> ranked = ranking.candidates();
+    ObservedStage policyStage =
+        control.start(PipelineObserver.StageKind.POLICY, policyType(), ranked.size());
     List<RankedCandidate<ID>> adjusted =
         observeStage(
             policyStage,
             () ->
                 validatePolicyOutput(
                     ranked, policy.apply(query, ranked, RankingContext.of(resultLimit))));
-    return List.copyOf(adjusted.subList(0, Math.min(adjusted.size(), resultLimit)));
+    control.checkActive();
+    return new FinishOutcome<>(
+        List.copyOf(adjusted.subList(0, Math.min(adjusted.size(), resultLimit))),
+        ranking.outcome(),
+        System.nanoTime());
+  }
+
+  private RankingResult<ID> rankWithinBudget(
+      Q query, List<RankedCandidate<ID>> fused, FinishControl control) {
+    List<RankedCandidate<ID>> inputs =
+        List.copyOf(fused.subList(0, Math.min(fused.size(), rankerSpec.inputLimit())));
+    ObservedStage stage =
+        control.start(PipelineObserver.StageKind.RANKER, rankerType(), inputs.size());
+    long budgetStartedAt = System.nanoTime();
+    long budget =
+        Math.min(
+            rankerSpec.timeout().toNanos(),
+            timeoutNanos - (budgetStartedAt - control.pipelineStart));
+    if (budget <= 0) {
+      stage.finish(PipelineObserver.StageStatus.DEADLINE_EXCEEDED, 0);
+      return rankingFallback(fused, inputs.size(), RankingStatus.SKIPPED_NO_BUDGET, stage, control);
+    }
+
+    RankingContext context =
+        RankingContext.of(
+            rankingLimit,
+            Duration.ofNanos(Math.max(0, budget - (System.nanoTime() - budgetStartedAt))));
+    Future<RankInvocation<ID>> future;
+    synchronized (lifecycleLock) {
+      control.checkActive();
+      future =
+          executor.submit(
+              () -> {
+                PipelineObserver.Scope scope = activate(stage.token);
+                try {
+                  control.checkActive();
+                  if (budget - (System.nanoTime() - budgetStartedAt) <= 0
+                      || timeoutNanos - (System.nanoTime() - control.pipelineStart) <= 0) {
+                    return new RankInvocation<>(
+                        List.of(),
+                        new TimeoutException("ranking budget expired before invocation"),
+                        System.nanoTime());
+                  }
+                  List<RankedCandidate<ID>> ranked =
+                      validateRankerOutput(inputs, ranker.rank(query, inputs, context));
+                  return new RankInvocation<>(
+                      limitUnique(ranked, rankingLimit), null, System.nanoTime());
+                } catch (RuntimeException | Error failure) {
+                  return new RankInvocation<>(List.of(), failure, System.nanoTime());
+                } finally {
+                  scope.close();
+                }
+              });
+      activeFutures.add(future);
+      control.setRankerFuture(future);
+    }
+    try {
+      RankInvocation<ID> invocation =
+          future.get(
+              Math.max(0, budget - (System.nanoTime() - budgetStartedAt)), TimeUnit.NANOSECONDS);
+      control.checkActive();
+      if (invocation.failure() instanceof Error error) {
+        stage.finish(PipelineObserver.StageStatus.FAILED, 0);
+        throw error;
+      }
+      if (invocation.completedAt() - budgetStartedAt > budget
+          || invocation.failure() instanceof TimeoutException) {
+        stage.finish(PipelineObserver.StageStatus.TIMED_OUT, 0);
+        return rankingFallback(fused, inputs.size(), RankingStatus.TIMED_OUT, stage, control);
+      }
+      if (invocation.failure() != null) {
+        stage.finish(PipelineObserver.StageStatus.FAILED, 0);
+        return rankingFallback(fused, inputs.size(), RankingStatus.FAILED, stage, control);
+      }
+      stage.finish(
+          invocation.candidates().isEmpty()
+              ? PipelineObserver.StageStatus.EMPTY
+              : PipelineObserver.StageStatus.SUCCESS,
+          invocation.candidates().size());
+      return new RankingResult<>(
+          invocation.candidates(),
+          new RankingOutcome(
+              invocation.candidates().isEmpty() ? RankingStatus.EMPTY : RankingStatus.SUCCESS,
+              inputs.size(),
+              invocation.candidates().size(),
+              stage.duration()));
+    } catch (TimeoutException e) {
+      future.cancel(true);
+      control.checkActive();
+      stage.finish(PipelineObserver.StageStatus.TIMED_OUT, 0);
+      return rankingFallback(fused, inputs.size(), RankingStatus.TIMED_OUT, stage, control);
+    } catch (ExecutionException e) {
+      control.checkActive();
+      boolean expired = e.getCause() instanceof TimeoutException;
+      stage.finish(
+          expired ? PipelineObserver.StageStatus.TIMED_OUT : PipelineObserver.StageStatus.FAILED,
+          0);
+      if (e.getCause() instanceof Error error) {
+        throw error;
+      }
+      return rankingFallback(
+          fused,
+          inputs.size(),
+          expired ? RankingStatus.TIMED_OUT : RankingStatus.FAILED,
+          stage,
+          control);
+    } catch (InterruptedException e) {
+      future.cancel(true);
+      Thread.currentThread().interrupt();
+      control.stop(PipelineObserver.StageStatus.CANCELLED);
+      throw new CancellationException("ranking interrupted");
+    } catch (CancellationException e) {
+      control.stop(PipelineObserver.StageStatus.CANCELLED);
+      throw e;
+    } finally {
+      synchronized (lifecycleLock) {
+        activeFutures.remove(future);
+      }
+    }
+  }
+
+  private RankingResult<ID> rankingFallback(
+      List<RankedCandidate<ID>> fused,
+      int inputCount,
+      RankingStatus status,
+      ObservedStage stage,
+      FinishControl control) {
+    control.checkActive();
+    if (rankerSpec.failurePolicy() == RankerFailurePolicy.FAIL) {
+      throw new IllegalStateException("bounded ranking did not succeed");
+    }
+    return new RankingResult<>(
+        List.copyOf(fused.subList(0, Math.min(fused.size(), rankingLimit))),
+        new RankingOutcome(status, inputCount, 0, stage.duration()));
   }
 
   private String fusionType() {
@@ -473,20 +639,20 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
   }
 
   private List<RankedCandidate<ID>> observeStage(
-      PipelineObserver.Stage stage, Supplier<List<RankedCandidate<ID>>> action) {
-    long startedAt = System.nanoTime();
-    PipelineObserver.Scope scope = activate(stage);
+      ObservedStage stage, Supplier<List<RankedCandidate<ID>>> action) {
+    PipelineObserver.Scope scope = activate(stage.token);
     try {
+      stage.control.checkActive();
       List<RankedCandidate<ID>> result = action.get();
-      stageFinished(
-          stage,
-          PipelineObserver.StageStatus.SUCCESS,
-          elapsed(startedAt, System.nanoTime()),
-          result.size());
+      stage.control.checkActive();
+      stage.finish(PipelineObserver.StageStatus.SUCCESS, result.size());
       return result;
     } catch (RuntimeException | Error failure) {
-      stageFinished(
-          stage, PipelineObserver.StageStatus.FAILED, elapsed(startedAt, System.nanoTime()), 0);
+      stage.finish(
+          failure instanceof CancellationException
+              ? PipelineObserver.StageStatus.CANCELLED
+              : PipelineObserver.StageStatus.FAILED,
+          0);
       throw failure;
     } finally {
       scope.close();
@@ -648,6 +814,37 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     return snapshot;
   }
 
+  private static <ID> List<RankedCandidate<ID>> validateRankerOutput(
+      List<RankedCandidate<ID>> inputs, List<RankedCandidate<ID>> output) {
+    List<RankedCandidate<ID>> snapshot =
+        List.copyOf(Objects.requireNonNull(output, "ranker must not return null"));
+    Map<ID, RankedCandidate<ID>> originals = new LinkedHashMap<>();
+    inputs.forEach(candidate -> originals.put(candidate.id(), candidate));
+    Set<ID> seen = new HashSet<>();
+    for (RankedCandidate<ID> candidate : snapshot) {
+      if (!seen.add(candidate.id())) {
+        throw new IllegalArgumentException("ranker must not return duplicate candidate IDs");
+      }
+      RankedCandidate<ID> original = originals.get(candidate.id());
+      if (original == null
+          || !original.contributions().equals(candidate.contributions())
+          || !original.attributes().equals(candidate.attributes())) {
+        throw new IllegalArgumentException("ranker must preserve selected candidate provenance");
+      }
+      if (candidate.rerankingScore().isPresent()) {
+        double fusionScore =
+            original.rerankingScore().isPresent()
+                ? original.rerankingScore().orElseThrow().fusionScore()
+                : original.score();
+        if (Double.compare(candidate.rerankingScore().orElseThrow().fusionScore(), fusionScore)
+            != 0) {
+          throw new IllegalArgumentException("ranker must preserve original fusion score");
+        }
+      }
+    }
+    return snapshot;
+  }
+
   /**
    * Stops accepting requests and interrupts in-flight work without waiting for uncooperative code.
    */
@@ -665,7 +862,85 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
 
   private record Invocation<ID>(RetrievalResult<ID> result, long completedAt) {}
 
-  private record FinishOutcome<ID>(List<RankedCandidate<ID>> candidates, long completedAt) {}
+  private record FinishOutcome<ID>(
+      List<RankedCandidate<ID>> candidates, RankingOutcome rankingOutcome, long completedAt) {}
+
+  private record RankInvocation<ID>(
+      List<RankedCandidate<ID>> candidates, Throwable failure, long completedAt) {}
+
+  private record RankingResult<ID>(List<RankedCandidate<ID>> candidates, RankingOutcome outcome) {}
+
+  private final class FinishControl {
+    private final long pipelineStart;
+    private final PipelineObserver.Execution observation;
+    private volatile boolean stopped;
+    private ObservedStage current;
+    private Future<?> rankerFuture;
+
+    private FinishControl(long pipelineStart, PipelineObserver.Execution observation) {
+      this.pipelineStart = pipelineStart;
+      this.observation = observation;
+    }
+
+    private void checkActive() {
+      if (stopped || closed || Thread.currentThread().isInterrupted()) {
+        throw new CancellationException("pipeline finalization cancelled");
+      }
+      if (finishRemaining(pipelineStart) <= 0) {
+        stop(PipelineObserver.StageStatus.DEADLINE_EXCEEDED);
+        throw new CancellationException("pipeline finalization deadline exceeded");
+      }
+    }
+
+    private synchronized ObservedStage start(
+        PipelineObserver.StageKind kind, String stableName, int inputs) {
+      checkActive();
+      current = new ObservedStage(this, startStage(observation, kind, stableName, inputs));
+      return current;
+    }
+
+    private synchronized void setRankerFuture(Future<?> future) {
+      rankerFuture = future;
+      if (stopped || closed) {
+        future.cancel(true);
+      }
+    }
+
+    private synchronized void stop(PipelineObserver.StageStatus status) {
+      stopped = true;
+      if (current != null) {
+        current.finish(status, 0);
+      }
+      if (rankerFuture != null) {
+        rankerFuture.cancel(true);
+      }
+    }
+  }
+
+  private final class ObservedStage {
+    private final FinishControl control;
+    private final PipelineObserver.Stage token;
+    private final long startedAt = System.nanoTime();
+    private boolean finished;
+    private Duration duration;
+
+    private ObservedStage(FinishControl control, PipelineObserver.Stage token) {
+      this.control = control;
+      this.token = token;
+    }
+
+    private synchronized void finish(PipelineObserver.StageStatus status, int count) {
+      if (!finished) {
+        finished = true;
+        duration = elapsed(startedAt, System.nanoTime());
+        stageFinished(token, status, duration, count);
+      }
+    }
+
+    private synchronized Duration duration() {
+      return duration == null ? elapsed(startedAt, System.nanoTime()) : duration;
+    }
+  }
 
   private static final class Job<Q, ID> {
     private final RetrieverSpec<Q, ID> spec;
@@ -700,6 +975,7 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     private FusionStrategy<ID> fusion;
     private int fusionLimit;
     private Ranker<Q, ID> ranker;
+    private RankerSpec<Q, ID> rankerSpec;
     private int rankingLimit;
     private RankingPolicy<Q, ID> policy = new IdentityRankingPolicy<>();
     private int resultLimit;
@@ -748,6 +1024,20 @@ public final class RankingPipeline<Q, ID> implements AutoCloseable {
     public Builder<Q, ID> ranker(Ranker<Q, ID> implementation, int candidateLimit) {
       ranker = Objects.requireNonNull(implementation, "ranker must not be null");
       rankingLimit = positive(candidateLimit, "ranking candidateLimit");
+      rankerSpec = null;
+      return this;
+    }
+
+    /**
+     * Selects bounded reranking with explicit timeout and fused fallback behavior.
+     *
+     * @param spec ranking implementation and pipeline-owned execution limits
+     * @return this builder
+     */
+    public Builder<Q, ID> ranker(RankerSpec<Q, ID> spec) {
+      rankerSpec = Objects.requireNonNull(spec, "rankerSpec must not be null");
+      ranker = spec.ranker();
+      rankingLimit = spec.outputLimit();
       return this;
     }
 

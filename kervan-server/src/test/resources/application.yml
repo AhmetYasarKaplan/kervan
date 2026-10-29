@@ -20,5 +20,9 @@ kervan:
         rank-constant: 60
         candidate-limit: 3
       ranker:
-        type: identity
+        type: custom
+        bean: batchRanker
+        input-limit: 3
         candidate-limit: 3
+        timeout: 500ms
+        failure-policy: keep-fused

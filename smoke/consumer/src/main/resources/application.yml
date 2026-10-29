@@ -49,3 +49,29 @@ kervan:
         type: custom
         bean: boostRanker
         candidate-limit: 2
+    bounded:
+      timeout: 2s
+      result-size: 2
+      failure-policy: partial-results
+      retrievers:
+        - name: search
+          bean: searchRetriever
+          candidate-limit: 2
+          timeout: 500ms
+          required: true
+        - name: recommendations
+          bean: recommendationRetriever
+          candidate-limit: 2
+          timeout: 500ms
+          required: false
+      fusion:
+        type: rrf
+        rank-constant: 60
+        candidate-limit: 3
+      ranker:
+        type: custom
+        bean: batchRanker
+        input-limit: 3
+        candidate-limit: 2
+        timeout: 500ms
+        failure-policy: keep-fused

@@ -7,6 +7,12 @@ ktfmt = "0.64"
 jacoco = "0.8.15"
 elasticsearch = "9.5.5"
 qdrant = "1.19.0"
+opensearch = "3.10.0"
+jackson = "3.2.3"
+jackson2 = "2.22.3"
+guava = "33.7.2-jre"
+tomcat = "11.0.27"
+postgresql = "42.7.14"
 testcontainers = "2.0.5"
 spring-boot = "4.1.1"
 micrometer = "1.17.1"
@@ -22,6 +28,17 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 elasticsearch-java = { module = "co.elastic.clients:elasticsearch-java", version.ref = "elasticsearch" }
 qdrant-java = { module = "io.qdrant:client", version.ref = "qdrant" }
+opensearch-java = { module = "org.opensearch.client:opensearch-java", version.ref = "opensearch" }
+jackson-databind = { module = "tools.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-core = { module = "tools.jackson.core:jackson-core", version.ref = "jackson" }
+jackson2-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson2" }
+jackson2-core = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson2" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+tomcat-embed-core = { module = "org.apache.tomcat.embed:tomcat-embed-core", version.ref = "tomcat" }
+tomcat-embed-el = { module = "org.apache.tomcat.embed:tomcat-embed-el", version.ref = "tomcat" }
+tomcat-embed-websocket = { module = "org.apache.tomcat.embed:tomcat-embed-websocket", version.ref = "tomcat" }
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+testcontainers-core = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
 testcontainers-elasticsearch = { module = "org.testcontainers:testcontainers-elasticsearch", version.ref = "testcontainers" }
 testcontainers-qdrant = { module = "org.testcontainers:testcontainers-qdrant", version.ref = "testcontainers" }
 spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }

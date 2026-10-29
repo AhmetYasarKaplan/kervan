@@ -97,3 +97,66 @@ PipelineAssertions.assertContributingSources(
 Use a deterministic provider fixture for the contract tests. A live external
 service can change ranking or availability and should be exercised separately
 in an integration test.
+
+## Offline relevance evaluation
+
+`RankingEvaluation.evaluate(rankedIds, judgments, k)` compares one query's
+best-first canonical ID list with explicit relevance judgments. It returns a
+`RankingMetrics` record. The evaluator uses only the JDK; it does not call a
+retriever, ranker, or external service.
+
+```java
+import io.github.ahmetyasarkaplan.kervan.testkit.RankingEvaluation;
+import io.github.ahmetyasarkaplan.kervan.testkit.RankingMetrics;
+import java.util.List;
+import java.util.Map;
+
+Map<String, Integer> judgments = Map.of(
+    "a", 3, "b", 2, "c", 1, "irrelevant", 0);
+RankingMetrics baseline = RankingEvaluation.evaluate(
+    List.of("irrelevant", "unjudged", "b", "a"), judgments, 3);
+RankingMetrics reranked = RankingEvaluation.evaluate(
+    List.of("a", "b", "c"), judgments, 3);
+
+// Baseline: P@3 = 1/3, R@3 = 1/3, RR@3 = 1/3,
+// nDCG@3 = 0.159696971619899, judged coverage = 2/3.
+// Reranked: all five measurements are 1.0 for this fixture.
+double change = reranked.ndcgAtK() - baseline.ndcgAtK();
+```
+
+The conventions are explicit so fixture comparisons remain reproducible:
+
+| Measurement | Convention |
+| --- | --- |
+| `precisionAtK()` | Positive judgments in the top K divided by K, even when fewer than K IDs are returned |
+| `recallAtK()` | Positive judgments in the top K divided by all positive judgments, including IDs absent from the ranking |
+| `reciprocalRankAtK()` | Reciprocal of the first positive judgment's one-based rank; zero when none occurs within K |
+| `ndcgAtK()` | DCG divided by ideal DCG; each rank contributes `(2^grade - 1) / log2(rank + 1)` |
+| `judgedCoverageAtK()` | IDs with an explicit judgment, including grade zero, divided by the number actually returned within K; zero for an empty ranking |
+
+K must be positive. Grades must be integers from 0 through 30 to keep exponential
+gains bounded; grade zero is irrelevant and every positive grade is relevant.
+Unjudged IDs contribute zero relevance, while coverage exposes how much of the
+returned list was explicitly judged. Low coverage can therefore make comparisons
+misleading. Ideal DCG sorts **all** judgments by descending grade, truncates at K,
+and uses the same discount. With no positive judgments, recall and nDCG are zero;
+an empty ranking produces zero for every measurement.
+
+Null collections, IDs, or grades are rejected. Duplicate IDs anywhere in the
+full ranking are rejected, even beyond K, so repeated candidates cannot boost
+measurements. Grades are validated for every judgment, including non-retrieved
+IDs. The supplied order determines rank; scores and tie handling belong to the
+caller. IDs need stable equality and hash codes, and input collections must not
+be mutated during evaluation.
+
+These are per-query measurements. Evaluate each query against its own judgments
+with a consistent K when comparing systems; averaging per-query reciprocal ranks
+gives mean reciprocal rank. The general metric definitions are described in
+[Elastic's ranking evaluation reference](https://www.elastic.co/docs/reference/elasticsearch/rest-apis/search-rank-eval).
+The exact cutoff, missing-judgment, and zero-denominator conventions above define
+this toolkit's behavior.
+
+Small offline fixtures help detect ranking regressions and demonstrate expected
+behavior. They do not establish general real-world relevance quality. That
+requires representative queries, suitable human judgments, sufficient coverage,
+and evaluation on data separate from ranking development.
