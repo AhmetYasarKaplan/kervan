@@ -2,55 +2,38 @@
 
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.ahmetyasarkaplan.kervan/kervan-core)](https://central.sonatype.com/artifact/io.github.ahmetyasarkaplan.kervan/kervan-core)
 
-**Bring candidates from many sources. Return one reliable ranking.**
+**Combine results from separate systems into one ranked list.**
 
-Kervan is a Java 21 library for coordinating candidates from independently
-operated providers. An application can combine search, recommendation, popularity,
-or custom provider results into one ranked list with canonical IDs and inspectable
-source contributions. Its synchronous pipeline includes concurrent provider
-calls, time budgets, failure policies, rank and score fusion, candidate limits,
-and source provenance. Optional modules provide Elasticsearch, OpenSearch,
-Qdrant and pgvector adapters, a Cohere reranking client, Spring Boot configuration,
-execution instrumentation, and reusable test fixtures.
-Batch reranking can score the combined candidate window with an application
-model or rule, retaining fusion scores and using explicit fallback when needed.
+Kervan is a Java 21 library for applications that get possible results from more than
+one source. For example, a product page might ask a search engine, a recommendation
+service, and a popularity service for products. Kervan calls those sources
+concurrently, merges products that share the same application ID, and returns one
+ordered list. Each result shows which sources found it. The response also reports
+which sources succeeded, failed, or timed out.
 
-## How it works
+Kervan runs inside your application. It does not index data, generate embeddings,
+train models, or replace the search and recommendation systems you already use.
 
-```text
-Request
-  -> invoke independent providers concurrently within a deadline
-  -> validate and limit each ordered source list
-  -> classify provider success, failure, and timeout
-  -> merge canonical IDs with source ranks and scores
-  -> rank and limit candidates
-  -> final ranked results
-```
+## When is it useful?
 
-Kervan runs as an embedded library inside your Java application.
+Use Kervan when **independent systems** contribute candidates to the same result
+page and you need shared rules for ranking, timeouts, and partial results. One
+source can be required while another is optional: if the optional source times
+out, the application can still return the available results and mark them partial.
 
-Kervan operates across provider boundaries. A search engine can perform its own
-lexical, vector, and hybrid retrieval inside one provider request; the application
-can then combine that result with independently operated providers. Search indexing,
-embedding generation, and model training/serving are outside Kervan's scope.
+If all retrieval happens inside one Elasticsearch or OpenSearch request, start
+with that engine's native search features. Kervan becomes useful when you also
+need to combine its results with another independently called source.
 
-Use Kervan when an application needs one ranking across independently operated
-search, recommendation, popularity, or custom candidate providers. It preserves
-each backend's native query features and provides shared ranking policies and
-execution outcomes. A backend's own hybrid search can serve a request entirely
-within that backend; Kervan is useful when the application also coordinates
-other candidate providers or shared ranking behavior.
+## Install
 
-## Installation
-
-Kervan 1.0.0 is available from Maven Central. Use JDK 21 or later.
+Kervan 1.0.0 is on Maven Central. Use JDK 21 or later. The core dependency is
+enough to build a pipeline with your own candidate providers.
 
 Gradle (Kotlin DSL):
 
 ```kotlin
-repositories {
-  mavenCentral()
-}
+repositories { mavenCentral() }
 
 dependencies {
   implementation("io.github.ahmetyasarkaplan.kervan:kervan-core:1.0.0")
@@ -67,11 +50,13 @@ Maven:
 </dependency>
 ```
 
-Add the optional modules your application needs using the same group and version.
-See [Getting started](docs/getting-started.md) for installation alternatives,
-Spring Boot configuration, and examples.
+Add an optional module only when you need its integration; see [What's included](#whats-included).
 
-## Embedded usage
+## Use it
+
+This example has two independent candidate providers. Both return `product-2`,
+so Kervan includes that ID once and records both contributions. The providers
+here use fixed data so you can try the pipeline without running any services.
 
 ```java
 import io.github.ahmetyasarkaplan.kervan.api.CandidateRetriever;
@@ -79,200 +64,88 @@ import io.github.ahmetyasarkaplan.kervan.api.FailurePolicy;
 import io.github.ahmetyasarkaplan.kervan.api.SourceCandidate;
 import io.github.ahmetyasarkaplan.kervan.core.IdentityRanker;
 import io.github.ahmetyasarkaplan.kervan.core.RankingPipeline;
-import io.github.ahmetyasarkaplan.kervan.core.ReciprocalRankFusion;
 import io.github.ahmetyasarkaplan.kervan.core.RetrieverSpec;
 import java.time.Duration;
 import java.util.List;
 
-CandidateRetriever<String, String> search =
-    (query, context) -> List.of(SourceCandidate.of("product-1", 4.2));
-CandidateRetriever<String, String> recommendations =
-    (query, context) -> List.of(SourceCandidate.of("product-1", 0.8));
+public class KervanExample {
+  public static void main(String[] args) {
+    CandidateRetriever<String, String> search = (query, context) -> List.of(
+        SourceCandidate.of("product-1", 4.2),
+        SourceCandidate.of("product-2", 3.8));
+    CandidateRetriever<String, String> recommendations = (query, context) -> List.of(
+        SourceCandidate.of("product-2", 0.9),
+        SourceCandidate.of("product-3", 0.7));
 
-try (RankingPipeline<String, String> pipeline =
-    RankingPipeline.<String, String>builder("discovery")
+    try (var pipeline = RankingPipeline.<String, String>builder("discovery")
         .addRetriever(RetrieverSpec.required("search", search, 10, Duration.ofMillis(140)))
-        .addRetriever(
-            RetrieverSpec.optional("recommendations", recommendations, 10, Duration.ofMillis(100)))
-        .fusion(new ReciprocalRankFusion<>(60), 20)
-        .ranker(new IdentityRanker<>(), 20)
+        .addRetriever(RetrieverSpec.optional(
+            "recommendations", recommendations, 10, Duration.ofMillis(100)))
+        .ranker(new IdentityRanker<>(), 10)
         .resultLimit(10)
         .timeout(Duration.ofMillis(250))
         .failurePolicy(FailurePolicy.PARTIAL_RESULTS)
         .build()) {
-
-    var result = pipeline.execute("camera");
-    // result.candidates() contains ranked IDs and source contributions.
-    // result.retrievalResults() contains each provider's status and duration.
+      var result = pipeline.execute("camera");
+      System.out.println(result.candidates().stream().map(candidate -> candidate.id()).toList());
+      System.out.println("partial=" + result.isPartial());
+    }
+  }
 }
 ```
 
-`ReciprocalRankFusion` combines source ranks without comparing their raw scores.
-It is also the pipeline default with a rank constant of 60 when `.fusion(...)`
-is omitted. An explicit fusion configuration sets both the strategy and its
-output limit.
-`WeightedReciprocalRankFusion` applies optional positive source weights to rank
-contributions. `WeightedMinMaxFusion` instead normalizes each source's returned
-higher-is-better scores and adds them using those weights. `FirstSeenFusion` remains
-available when provider registration order should determine the result. All four
-strategies retain each provider's rank and Kervan-facing score for inspection.
-Retriever implementations are supplied by the application. The example uses
-in-memory lambdas; it does not contact an external provider.
+This prints `[product-2, product-1, product-3]` and `partial=false`.
+The default fusion strategy is reciprocal rank fusion: it uses each source's
+*ordering*, so the two example scores do not need to be on the same scale.
+`result.candidates()` also contains each item's source contributions;
+`result.retrievalResults()` contains each provider's status and duration.
+If the optional recommendation provider fails, the search results remain available
+and `result.isPartial()` reports `true`.
 
-## Modules
+To use real systems, replace the two lambdas with implementations of
+`CandidateRetriever`. Return your application's **same canonical ID** for the
+same item across sources. Construct a pipeline once and reuse it for requests;
+close it when your application shuts down. The [extension guide](docs/extension-guide.md)
+explains custom providers, and the [Spring Boot guide](docs/spring-boot.md) shows
+how to assemble and manage pipelines with application beans and configuration.
 
-| Module | Responsibility |
+## What's included
+
+| Need | Module |
 | --- | --- |
-| `kervan-api` | Public contracts and domain-independent value types |
-| `kervan-core` | Concurrent pipeline, fusion, bounded batch reranking, time budgets, and final ranking policies |
-| `kervan-elasticsearch` | Official-client adapter that maps one Elasticsearch search response into a provider list |
-| `kervan-qdrant` | Official-client adapter for Qdrant vector or native hybrid query results |
-| `kervan-opensearch` | Official-client adapter for native OpenSearch queries and canonical hit mapping |
-| `kervan-pgvector` | JDBC adapter for prepared pgvector SQL, canonical row mapping and bounded waits |
-| `kervan-reranking` | Ready Cohere v2 batch scorer with bulk hydration and bounded HTTP requests |
-| `kervan-spring-boot-starter` | Auto-configuration that assembles named pipelines from properties and application beans |
-| `kervan-server` | Optional HTTP adapter for explicitly bound Spring Boot pipelines |
-| `kervan-observability` | Optional Micrometer metrics, OpenTelemetry spans, and structured execution logs |
-| `kervan-testkit` | Retriever fixtures, contract tests, pipeline assertions, and offline relevance metrics |
-| `examples/product-discovery` | Runnable Spring Boot example with Elasticsearch, an HTTP recommendation provider, and in-memory popularity |
+| Concurrent providers, deadlines, partial results, fusion, and batch reranking | `kervan-core` (includes `kervan-api`) |
+| Map native results from Elasticsearch, OpenSearch, Qdrant, or pgvector | `kervan-elasticsearch`, `kervan-opensearch`, `kervan-qdrant`, `kervan-pgvector` |
+| Ready-made Cohere v2 batch scorer | `kervan-reranking` |
+| Spring Boot configuration or an optional HTTP endpoint | `kervan-spring-boot-starter`, `kervan-server` |
+| Metrics, traces, logs, or test fixtures | `kervan-observability`, `kervan-testkit` |
 
-Production dependencies flow from `kervan-core` to `kervan-api` to the JDK.
-`kervan-elasticsearch`, `kervan-opensearch` and `kervan-qdrant` depend on `kervan-api`
-and their respective pinned official Java clients. API and core have no external production
-dependencies. The Maven group and Java package prefix are
-`io.github.ahmetyasarkaplan.kervan`. The Spring Boot starter depends on core and
-Spring Boot, while provider adapters remain independent optional modules.
-The observability module depends on core and its telemetry APIs; testkit depends
-on API and JUnit Jupiter. Neither adds an infrastructure dependency to API or
-core.
+Provider adapters accept native requests and map their returned IDs into your
+application's canonical IDs. Your application still owns provider clients,
+queries, and the domain objects behind those IDs. Optional modules use the same
+Maven group and version as `kervan-core`.
 
-The [OpenSearch](docs/opensearch.md), [pgvector](docs/pgvector.md), and
-[Cohere reranking](docs/cohere-reranking.md) integrations are optional dependencies.
-The JDBC adapter depends on API and the JDK; applications choose their JDBC driver
-and connection pool. Client, driver and JSON dependencies stay outside API/core.
-For similarity-based diversity, core supplies
-[maximal marginal relevance](docs/diversity.md), preserving original ranking scores.
+## Try the examples
 
-## Run the product discovery example
-
-Start with a local fusion-versus-reranking comparison that needs no services:
+The repository has a service-free example that compares fusion with batch
+reranking. With JDK 21 installed, run from the repository root:
 
 ```sh
 ./gradlew :examples:product-discovery:runReranking
 ```
 
-See the [batch reranking guide](docs/reranking.md) for scoring callbacks, limits,
-fallback and score inspection, and [ranking policies](docs/ranking-policies.md)
-for pins and group quotas.
+On Windows, use `.\gradlew.bat` instead of `./gradlew`. The full
+[product discovery example](docs/getting-started.md#run-the-product-discovery-example)
+combines Elasticsearch, a separate HTTP recommendation service, and popularity
+results; it needs Docker and three terminals.
 
-With JDK 21 and Docker running, start Elasticsearch and the separate demo
-recommendation process, then run the Spring Boot application in another terminal:
+## Learn more
 
-```sh
-docker compose -f examples/product-discovery/compose.yaml up --wait -d
-./gradlew :examples:product-discovery:runRecommendations
-```
-
-```sh
-./gradlew :examples:product-discovery:run
-```
-
-On Windows, replace `./gradlew` with `.\gradlew.bat`. The application seeds a
-three-product catalog, executes one native Elasticsearch `query` + `knn` request,
-and prints the fused IDs, contributing sources, and provider statuses. See the
-[getting-started guide](docs/getting-started.md) for setup details and the
-equivalent Spring Boot configuration.
-
-The example's Spring configuration names application retriever beans and keeps
-their time and candidate limits visible:
-
-```yaml
-kervan:
-  pipelines:
-    discovery:
-      timeout: 3s
-      result-size: 5
-      failure-policy: partial-results
-      retrievers:
-        - name: search
-          bean: searchRetriever
-          candidate-limit: 5
-          timeout: 2s
-          required: true
-        - name: recommendations
-          bean: recommendationRetriever
-          candidate-limit: 3
-          timeout: 700ms
-          required: false
-```
-
-## Build locally
-
-Install a JDK 21 and make it available through `JAVA_HOME` or `PATH`. The build
-uses a Java 21 toolchain and does not download JDKs automatically. Git and network
-access to the Gradle distribution, Plugin Portal, and Maven Central are needed
-for an initial checkout and build. Docker is required for the Elasticsearch,
-OpenSearch, Qdrant and pgvector integration tests included in `check`. A separate Gradle installation is
-unnecessary.
-
-```sh
-java -version
-./gradlew --version
-./gradlew clean check
-```
-
-On Windows, use `gradlew.bat clean check`.
-
-The wrapper downloads the pinned Gradle distribution and verifies its SHA-256.
-`check` runs formatting and Javadoc checks, module tests, coverage reporting, and
-production dependency-boundary validation. GitHub Actions uses the same command
-on Ubuntu with Temurin Java 21.
-
-## Verification and formatting
-
-```sh
-./gradlew spotlessCheck
-./gradlew spotlessApply
-./gradlew :kervan-api:check :kervan-core:check
-```
-
-Spotless formats Java with google-java-format and Kotlin build scripts with ktfmt.
-JUnit Jupiter and AssertJ are configured for each module. Compiler warnings are
-enabled.
-Tool versions are pinned in the [version catalog](gradle/libs.versions.toml) and
-[wrapper configuration](gradle/wrapper/gradle-wrapper.properties).
-
-Test and coverage reports are generated under each module:
-
-- Tests: `build/reports/tests/test/index.html`
-- Coverage: `build/reports/jacoco/test/html/index.html`
-- Coverage XML: `build/reports/jacoco/test/jacocoTestReport.xml`
-
-See the [Elasticsearch adapter guide](docs/elasticsearch.md) for a native hybrid
-request combined with an independent provider.
-See the [Qdrant adapter guide](docs/qdrant.md) for vector and native hybrid queries,
-canonical ID mapping, and score direction.
-See the [Spring Boot guide](docs/spring-boot.md) for YAML configuration, custom
-beans, validation, and lifecycle.
-See the [HTTP server guide](docs/server.md) to expose selected pipelines through
-an application endpoint.
-See the [observability guide](docs/observability.md) to attach metrics, tracing,
-and structured logs, and the [testkit guide](docs/testkit.md) for deterministic
-retriever contract tests and pipeline fixtures.
-See the [extension guide](docs/extension-guide.md) for implementing custom
-retrievers, fusion strategies, and rankers.
-See the [release guide](docs/releasing.md) for versioning and publication setup.
-See the [changelog](CHANGELOG.md) for the contents of the current version.
-See the [public API review](docs/api-review.md) for contract details and usage
-notes.
-
-## Design documentation
-
-- [Architecture and module boundaries](docs/architecture.md)
-- [Product scope and responsibilities](docs/project-scope.md)
-- [Java 21 and Gradle](docs/adr/0001-java-21-and-gradle.md)
-- [Framework-independent module boundaries](docs/adr/0002-module-boundaries.md)
-- [Provider boundaries and native search capabilities](docs/adr/0003-provider-boundaries.md)
-- [Deadlines and failure policies](docs/adr/0004-deadlines-and-failure-policies.md)
-- [Cross-provider fusion](docs/adr/0005-cross-provider-fusion.md)
-- [Elasticsearch adapter boundary](docs/adr/0006-elasticsearch-adapter.md)
+- [Getting started](docs/getting-started.md): installation and runnable examples
+- [Architecture](docs/architecture.md): provider boundaries and execution flow
+- [Ranking and reranking](docs/reranking.md): scoring, limits, and fallback
+- [Spring Boot](docs/spring-boot.md): beans, YAML configuration, and lifecycle
+- [Adapters](docs/elasticsearch.md): start with Elasticsearch; see also
+  [OpenSearch](docs/opensearch.md), [Qdrant](docs/qdrant.md), and
+  [pgvector](docs/pgvector.md)
+- [Observability](docs/observability.md) and [testkit](docs/testkit.md)
+- [Contributing](CONTRIBUTING.md) and [changelog](CHANGELOG.md)
